@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: bi-laguna
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: APP_NAME
+        value: BI Laguna
+      - key: LAGUNA_ALLOWED_ORIGINS
+        value: https://sites.google.com,https://script.google.com,https://script.googleusercontent.com

@@ -1,0 +1,1 @@
+"""BI Laguna Python application."""

@@ -1,0 +1,17 @@
+.env
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.log
+server.out.log
+server.err.log
+
+data/*
+!data/.gitkeep
+
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.idea/
+.vscode/

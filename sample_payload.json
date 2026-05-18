@@ -1,0 +1,88 @@
+{
+  "ok": true,
+  "app": "BI Laguna",
+  "category": "Cortes",
+  "source": {
+    "id": "demo-cortes",
+    "name": "Planilha Demo Cortes",
+    "category": "Cortes",
+    "type": "google_sheets"
+  },
+  "generatedAt": "2026-05-18T14:10:00Z",
+  "data": {
+    "indicators": {
+      "totalCuts": 128,
+      "totalLength": "262880.00",
+      "totalBars": "43.81",
+      "totalTimeMinutes": "412.00",
+      "totalClients": 2,
+      "totalProcesses": 3
+    },
+    "cutTypeCounts": {
+      "2 cortes retos": 42,
+      "1 corte reto e 1 corte em angulo": 68,
+      "2 cortes em angulo": 18
+    },
+    "clientSummary": [
+      {
+        "client": "CLIENTE DEMO A",
+        "processes": 2,
+        "totalCuts": 96,
+        "totalLength": "198540.00",
+        "totalBars": "33.09",
+        "totalTimeMinutes": "308.00"
+      },
+      {
+        "client": "CLIENTE DEMO B",
+        "processes": 1,
+        "totalCuts": 32,
+        "totalLength": "64340.00",
+        "totalBars": "10.72",
+        "totalTimeMinutes": "104.00"
+      }
+    ],
+    "clientProcessSummary": [
+      {
+        "client": "CLIENTE DEMO A",
+        "process": "Fechadura Minimalista Laguna",
+        "totalCuts": 54,
+        "cuts2Retos": 12,
+        "cuts1Reto1Angulo": 36,
+        "cuts2Angulos": 6,
+        "totalLength": "111240.00",
+        "totalBars": "18.54",
+        "timeMinutes": "186.00"
+      },
+      {
+        "client": "CLIENTE DEMO A",
+        "process": "Dobradica Sobrepor RAJ",
+        "totalCuts": 42,
+        "cuts2Retos": 18,
+        "cuts1Reto1Angulo": 20,
+        "cuts2Angulos": 4,
+        "totalLength": "87300.00",
+        "totalBars": "14.55",
+        "timeMinutes": "122.00"
+      },
+      {
+        "client": "CLIENTE DEMO B",
+        "process": "Fechadura Scivola",
+        "totalCuts": 32,
+        "cuts2Retos": 12,
+        "cuts1Reto1Angulo": 12,
+        "cuts2Angulos": 8,
+        "totalLength": "64340.00",
+        "totalBars": "10.72",
+        "timeMinutes": "104.00"
+      }
+    ],
+    "profileBarUsage": [
+      { "profile": "FLP-021", "totalLength": "92800.00", "totalBars": "15.47" },
+      { "profile": "FLP-026", "totalLength": "106540.00", "totalBars": "17.76" },
+      { "profile": "EPC-005", "totalLength": "63540.00", "totalBars": "10.59" }
+    ],
+    "dailySummary": [
+      { "date": "2025-10-31", "totalCuts": 128, "timeTaken": "412.00" }
+    ]
+  }
+}
