@@ -4,10 +4,12 @@ Arquivos para colar no projeto do Google Apps Script conectado as planilhas.
 
 ## Abas reconhecidas
 
-O extrator le automaticamente abas cujo nome contenha:
+O extrator separa as abas pela categoria da origem:
 
-- `CRT PER`
-- `USI PER`
+- Categoria `Cortes`: le somente abas `CRT PER`.
+- Categoria `Usinagem`: le somente abas `USI PER`.
+
+Se a categoria nao estiver configurada, o script tenta detectar pelo nome das abas.
 
 Para usinagem, o padrao esperado e o mesmo do print enviado:
 

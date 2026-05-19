@@ -85,9 +85,14 @@ Endpoints úteis:
 
 ## Extrator de usinagem
 
-Os arquivos do Apps Script ficam em `apps_script/`.
+Os arquivos gerais do Apps Script ficam em `apps_script/`.
 
-O extrator reconhece abas com nome contendo `CRT PER` ou `USI PER`. Para as planilhas de usinagem, ele usa:
+As planilhas foram separadas por pasta:
+
+- `planilha perfis corte/`: arquivos e orientacao para a origem `Cortes`, lendo somente abas `CRT PER`.
+- `usinagem/`: documentacao da origem `Usinagem`, lendo somente abas `USI PER`.
+
+Para as planilhas de usinagem, o extrator usa:
 
 - `CORTE` para tipo de corte.
 - `PERFIL 2` para tipo do perfil.
