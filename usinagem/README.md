@@ -37,10 +37,10 @@ O extrator usa a data/hora do `BIPADO` para calcular tempo total por cliente e p
 
 ## Configuracao recomendada
 
-Na planilha de usinagem, use:
+Na planilha de usinagem, use o menu:
 
 ```text
-Analise de Cortes > Configurar Origem/Categoria
+BI Laguna - Usinagem > Configurar Origem/Categoria
 ```
 
 Preencha:
@@ -57,3 +57,15 @@ https://bi-lagunaportas.vercel.app/api/ingest
 ```
 
 Para envio em lote, cadastre esta planilha na aba `LagunaBI_Origens_Pendentes` com categoria `Usinagem`.
+
+## Arquivos `.gs`
+
+Cole/anexe estes arquivos no Apps Script da planilha de usinagem:
+
+```text
+Reports.gs
+api.gs
+main.gs
+```
+
+Estes arquivos desta pasta sao dedicados para `USI PER`. Por padrao, eles nao leem abas `CRT PER`.
