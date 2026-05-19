@@ -80,6 +80,29 @@ Endpoints úteis:
 - `GET /api/data`: consolidado geral.
 - `GET /api/data?category=Cortes`: apenas uma categoria.
 - `GET /api/data?source=chave-da-origem`: apenas uma origem.
+- `POST /api/ingest`: recebe uma origem individual.
+- `POST /api/ingest-batch`: recebe varias origens juntas em `payloads`.
+
+## Extrator de usinagem
+
+Os arquivos do Apps Script ficam em `apps_script/`.
+
+O extrator reconhece abas com nome contendo `CRT PER` ou `USI PER`. Para as planilhas de usinagem, ele usa:
+
+- `CORTE` para tipo de corte.
+- `PERFIL 2` para tipo do perfil.
+- `COMP` e `QTD` para comprimento e quantidade.
+- `USINAGEM` para processo.
+- `CLIENTE` para separacao por cliente.
+- `BIPADO` para operador, data e hora.
+
+Para varias planilhas, use no Google Sheets:
+
+```text
+Analise de Cortes > Preparar Lista de Planilhas Pendentes
+Analise de Cortes > Extrair Planilhas Pendentes
+Analise de Cortes > Enviar Pendentes em Lote para API
+```
 
 ## Configurar o Apps Script
 
@@ -162,6 +185,7 @@ Copie `.env.example` como referencia:
 - `GET /api/data`: consolidado geral ou filtrado por query string.
 - `GET /api/sources`: origens e categorias recebidas.
 - `POST /api/ingest`: recebe payload do Apps Script.
+- `POST /api/ingest-batch`: recebe varios payloads do Apps Script em lote.
 - `POST /api/sync`: puxa dados de `LAGUNA_SOURCE_URL` e salva localmente.
 
 ## Deploy

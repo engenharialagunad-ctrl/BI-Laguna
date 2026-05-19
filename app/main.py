@@ -93,6 +93,17 @@ def rebuild_combined_payload() -> Dict[str, Any]:
     return combined
 
 
+def get_batch_payloads(payload: Any) -> list[Dict[str, Any]]:
+    if isinstance(payload, list):
+        return [item for item in payload if isinstance(item, dict)]
+    if isinstance(payload, dict):
+        for key in ("payloads", "sources", "items"):
+            values = payload.get(key)
+            if isinstance(values, list):
+                return [item for item in values if isinstance(item, dict)]
+    return []
+
+
 @app.get("/", response_class=HTMLResponse)
 def dashboard(request: Request) -> HTMLResponse:
     return templates.TemplateResponse("dashboard.html", {"request": request, "app_name": APP_NAME, "embed": False})
@@ -153,6 +164,35 @@ async def ingest(
         "message": "Dados recebidos pelo BI Laguna.",
         "source": normalized["source"],
         "receivedAt": normalized["receivedAt"],
+    }
+
+
+@app.post("/api/ingest-batch")
+async def ingest_batch(
+    request: Request,
+    authorization: str | None = Header(default=None),
+    x_laguna_token: str | None = Header(default=None),
+) -> Dict[str, Any]:
+    require_ingest_token(authorization, x_laguna_token)
+    payload = await request.json()
+    items = get_batch_payloads(payload)
+    if not items:
+        raise HTTPException(status_code=400, detail="Envie uma lista de payloads em 'payloads', 'sources' ou no corpo JSON.")
+
+    received_sources = []
+    for item in items:
+        normalized = normalize_payload(item)
+        write_json(source_path(normalized["source"]["key"]), normalized)
+        received_sources.append(normalized["source"])
+
+    combined = rebuild_combined_payload()
+    return {
+        "ok": True,
+        "message": "Lote recebido pelo BI Laguna.",
+        "received": len(received_sources),
+        "sources": received_sources,
+        "combinedSources": len(combined.get("sources", [])),
+        "receivedAt": combined.get("receivedAt"),
     }
 
 

@@ -141,6 +141,14 @@ def build_charts(data: Dict[str, Any]) -> Dict[str, List[Dict[str, Any]]]:
             )
             for item in data.get("dailySummary", []) or []
         ],
+        "operatorTime": [
+            chart_item(
+                item.get("operator", "-"),
+                item.get("timeMinutes"),
+                cuts=to_number(item.get("totalCuts")),
+            )
+            for item in data.get("operatorSummary", []) or []
+        ],
     }
 
 
@@ -200,6 +208,7 @@ def aggregate_payloads(payloads: List[Dict[str, Any]]) -> Dict[str, Any]:
         "dailyProfileUsage": [],
         "clientProcessSummary": [],
         "clientSummary": [],
+        "operatorSummary": [],
     }
 
     sources: List[Dict[str, str]] = []
@@ -234,7 +243,7 @@ def aggregate_payloads(payloads: List[Dict[str, Any]]) -> Dict[str, Any]:
             processes.add((source.get("category", "Geral"), row.get("process", "-")))
             combined_data["clientProcessSummary"].append(enriched)
 
-        for key in ["dailySummary", "profileBarUsage", "dailyProfileUsage"]:
+        for key in ["dailySummary", "profileBarUsage", "dailyProfileUsage", "operatorSummary"]:
             for row in data.get(key, []) or []:
                 combined_data[key].append(with_source(row, source))
 
