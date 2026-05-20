@@ -686,6 +686,7 @@ function formatLagunaValidation_(validation) {
     "Leitura anterior: " + (validation.hasPreviousRead ? "sim" : "nao"),
     "Leitura repetida: " + (validation.isRepeatRead ? "sim" : "nao"),
     "Novos cortes: " + (delta.cuts || 0),
+    "Novas pecas: " + (delta.pieces || 0),
     "Novos metros: " + (delta.lengthMeters || 0),
     "Novas horas: " + (delta.timeHours || 0),
     "Pecas atuais: " + (pieces.current || 0),

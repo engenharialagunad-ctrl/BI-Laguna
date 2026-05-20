@@ -1,5 +1,22 @@
 var LAST_EXTRACTION_DIAGNOSTIC = "";
 
+function getLagunaReportDefaultCategory_(spreadsheet) {
+  if (typeof LAGUNA_DEFAULT_SOURCE_CATEGORY !== "undefined" && LAGUNA_DEFAULT_SOURCE_CATEGORY) {
+    return LAGUNA_DEFAULT_SOURCE_CATEGORY;
+  }
+  if (typeof detectLagunaDefaultCategory_ === "function") {
+    return detectLagunaDefaultCategory_(spreadsheet);
+  }
+  return "Cortes";
+}
+
+function getLagunaReportDefaultSheetPattern_() {
+  if (typeof LAGUNA_DEFAULT_SHEET_PATTERN !== "undefined" && LAGUNA_DEFAULT_SHEET_PATTERN) {
+    return LAGUNA_DEFAULT_SHEET_PATTERN;
+  }
+  return "CRT PER";
+}
+
 function getReportData(options) {
   var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
   var configuredCategory = "";
@@ -8,9 +25,7 @@ function getReportData(options) {
   } catch (error) {
     configuredCategory = "";
   }
-  var defaultCategory = typeof detectLagunaDefaultCategory_ === "function"
-    ? detectLagunaDefaultCategory_(spreadsheet)
-    : "";
+  var defaultCategory = getLagunaReportDefaultCategory_(spreadsheet);
   return getReportDataFromSpreadsheet_(spreadsheet, options || { category: configuredCategory || defaultCategory });
 }
 
@@ -22,10 +37,14 @@ function getReportDataFromSpreadsheet_(spreadsheet, options) {
   var diagnostic = {
     allSheetNames: [],
     candidateSheets: [],
+    hiddenCandidateSheets: [],
     ignoredSheets: [],
     validRows: 0,
-    ignoredRows: 0
+    ignoredRows: 0,
+    duplicateRows: 0,
+    missingPieceIdRows: 0
   };
+  var seenRowKeys = {};
 
   function normalizeText(value) {
     if (value === null || value === undefined) return "";
@@ -44,23 +63,31 @@ function getReportDataFromSpreadsheet_(spreadsheet, options) {
     });
   }
 
+  function isSheetHidden_(sheet) {
+    try {
+      return typeof sheet.isSheetHidden === "function" && sheet.isSheetHidden();
+    } catch (error) {
+      return false;
+    }
+  }
+
   function isDataSheet(sheetName) {
     var normalizedName = normalizeText(sheetName);
     var isCrtPer = normalizedName.indexOf("crt per") !== -1;
     var isUsiPer = normalizedName.indexOf("usi per") !== -1;
-    var mode = normalizeText(options.sheetMode || options.category || "");
+    var mode = normalizeText(options.sheetMode || options.category || getLagunaReportDefaultSheetPattern_());
 
     if (mode.indexOf("usinagem") !== -1 || mode.indexOf("usi") !== -1) return isUsiPer;
     if (mode.indexOf("corte") !== -1 || mode.indexOf("crt") !== -1) return isCrtPer;
 
-    return isCrtPer || isUsiPer;
+    return isCrtPer;
   }
 
   function getSheetPatternLabel() {
-    var mode = normalizeText(options.sheetMode || options.category || "");
+    var mode = normalizeText(options.sheetMode || options.category || getLagunaReportDefaultSheetPattern_());
     if (mode.indexOf("usinagem") !== -1 || mode.indexOf("usi") !== -1) return "USI PER";
     if (mode.indexOf("corte") !== -1 || mode.indexOf("crt") !== -1) return "CRT PER";
-    return "CRT PER/USI PER";
+    return "CRT PER";
   }
 
   function findColumnIndex(headers, keywords) {
@@ -102,8 +129,12 @@ function getReportDataFromSpreadsheet_(spreadsheet, options) {
       var quantityCol = findExactColumnIndex(headers, ["qtd", "quantidade", "qtde"]);
       var clientCol = findRequiredColumnIndex(headers, ["cliente"], ["cliente", "client"]);
       var processCol = findRequiredColumnIndex(headers, ["usinagem"], ["usinagem", "processo", "process"]);
+      var orderCol = findRequiredColumnIndex(headers, ["pedido"], ["pedido", "order"]);
+      var environmentCol = findRequiredColumnIndex(headers, ["ambiente"], ["ambiente", "environment"]);
+      var pieceIdCol = findRequiredColumnIndex(headers, ["id peca", "id peça"], ["id peca", "id peça", "peca", "peça"]);
+      var doorCol = findRequiredColumnIndex(headers, ["porta"], ["porta", "door"]);
 
-      if (dateTimeCol !== -1 && cutTypeCol !== -1 && profileCol !== -1 && lengthCol !== -1) {
+      if (dateTimeCol !== -1 && cutTypeCol !== -1 && profileCol !== -1 && lengthCol !== -1 && pieceIdCol !== -1) {
         return {
           rowIndex: rowIndex,
           dateTimeCol: dateTimeCol,
@@ -112,7 +143,11 @@ function getReportDataFromSpreadsheet_(spreadsheet, options) {
           lengthCol: lengthCol,
           quantityCol: quantityCol,
           clientCol: clientCol,
-          processCol: processCol
+          processCol: processCol,
+          orderCol: orderCol,
+          environmentCol: environmentCol,
+          pieceIdCol: pieceIdCol,
+          doorCol: doorCol
         };
       }
     }
@@ -189,6 +224,35 @@ function getReportDataFromSpreadsheet_(spreadsheet, options) {
     return match ? match[1].trim() : "";
   }
 
+  function mmToMeters(value) {
+    return (Number(value || 0) / 1000).toFixed(2);
+  }
+
+  function minutesToHours(value) {
+    return (Number(value || 0) / 60).toFixed(2);
+  }
+
+  function updateDailyWindow(usage, dateKey, timestamp) {
+    if (!usage.dailyWindows) usage.dailyWindows = {};
+    if (!usage.dailyWindows[dateKey]) {
+      usage.dailyWindows[dateKey] = {
+        firstCutTime: timestamp,
+        lastCutTime: timestamp
+      };
+      return;
+    }
+
+    usage.dailyWindows[dateKey].firstCutTime = Math.min(usage.dailyWindows[dateKey].firstCutTime, timestamp);
+    usage.dailyWindows[dateKey].lastCutTime = Math.max(usage.dailyWindows[dateKey].lastCutTime, timestamp);
+  }
+
+  function sumDailyWindowMinutes(dailyWindows) {
+    return Object.keys(dailyWindows || {}).reduce(function(total, dateKey) {
+      var window = dailyWindows[dateKey];
+      return total + Math.max(0, (window.lastCutTime - window.firstCutTime) / (1000 * 60));
+    }, 0);
+  }
+
   function classifyCutType(value) {
     var normalized = normalizeText(value).replace(/ graus?/g, "");
     var numbers = normalized.match(/\d+/g);
@@ -204,16 +268,47 @@ function getReportDataFromSpreadsheet_(spreadsheet, options) {
     return "";
   }
 
+  function getOptionalCellValue(rawRow, displayRow, columnIndex) {
+    if (columnIndex === -1) return "";
+    return String(displayRow[columnIndex] || rawRow[columnIndex] || "").trim();
+  }
+
+  function buildRowKey(item) {
+    if (item.pieceId) {
+      return ["peca", item.pieceId].map(function(value) {
+        return normalizeText(value);
+      }).join("|");
+    }
+
+    return [
+      "linha",
+      item.dateTime.getTime(),
+      item.client,
+      item.process,
+      item.environment,
+      item.door,
+      item.cutType,
+      item.profile,
+      item.length,
+      item.quantity
+    ].map(function(value) {
+      return normalizeText(value);
+    }).join("|");
+  }
+
   diagnostic.sheetPattern = getSheetPatternLabel();
 
   allSheets.forEach(function(sheet) {
     var sheetName = sheet.getName();
+    var isHiddenSheet = isSheetHidden_(sheet);
+    var sheetLabel = sheetName + (isHiddenSheet ? " (oculta)" : "");
     diagnostic.allSheetNames.push(sheetName);
 
     if (isResultSheet(sheetName)) return;
     if (!isDataSheet(sheetName)) return;
 
-    diagnostic.candidateSheets.push(sheetName);
+    diagnostic.candidateSheets.push(sheetLabel);
+    if (isHiddenSheet) diagnostic.hiddenCandidateSheets.push(sheetName);
     if (sheet.getLastRow() < 2 || sheet.getLastColumn() < 1) {
       diagnostic.ignoredSheets.push(sheetName + ": aba vazia ou sem linhas de dados");
       return;
@@ -225,7 +320,7 @@ function getReportDataFromSpreadsheet_(spreadsheet, options) {
     var headerInfo = findHeaderInfo(displayValues);
 
     if (!headerInfo) {
-      diagnostic.ignoredSheets.push(sheetName + ": cabecalhos BIPADO, CORTE, PERFIL 2 e COMP nao encontrados nas primeiras 20 linhas");
+      diagnostic.ignoredSheets.push(sheetName + ": cabecalhos BIPADO, CORTE, PERFIL 2, COMP e ID PECA nao encontrados nas primeiras 20 linhas");
       Logger.log("Aba " + sheetName + " ignorada: cabecalhos obrigatorios nao encontrados.");
       return;
     }
@@ -246,16 +341,20 @@ function getReportDataFromSpreadsheet_(spreadsheet, options) {
       var process = headerInfo.processCol === -1
         ? "Sem processo"
         : String(displayRow[headerInfo.processCol] || rawRow[headerInfo.processCol] || "Sem processo").trim();
+      var order = getOptionalCellValue(rawRow, displayRow, headerInfo.orderCol);
+      var environment = getOptionalCellValue(rawRow, displayRow, headerInfo.environmentCol);
+      var pieceId = getOptionalCellValue(rawRow, displayRow, headerInfo.pieceIdCol);
+      var door = getOptionalCellValue(rawRow, displayRow, headerInfo.doorCol);
 
-      if (!dateTime || !cutType || !profile || isNaN(length) || isNaN(quantity)) {
+      if (!dateTime || !cutType || !profile || isNaN(length) || isNaN(quantity) || !pieceId) {
         diagnostic.ignoredRows++;
+        if (!pieceId) diagnostic.missingPieceIdRows++;
         Logger.log("Linha ignorada em " + sheetName + " linha " + (rowIndex + 1) + ": dados incompletos ou invalidos.");
         continue;
       }
 
       if (quantity <= 0) quantity = 1;
-      diagnostic.validRows++;
-      consolidatedData.push({
+      var rowItem = {
         dateTime: dateTime,
         cutType: cutType,
         profile: profile,
@@ -264,8 +363,20 @@ function getReportDataFromSpreadsheet_(spreadsheet, options) {
         client: client || "Sem cliente",
         process: process || "Sem processo",
         operator: parseBipadoOperator(displayRow[headerInfo.dateTimeCol] || rawRow[headerInfo.dateTimeCol]),
-        sheetName: sheetName
-      });
+        sheetName: sheetName,
+        order: order,
+        environment: environment,
+        pieceId: pieceId,
+        door: door
+      };
+      var rowKey = buildRowKey(rowItem);
+      if (seenRowKeys[rowKey]) {
+        diagnostic.duplicateRows++;
+        continue;
+      }
+      seenRowKeys[rowKey] = true;
+      diagnostic.validRows++;
+      consolidatedData.push(rowItem);
     }
   });
 
@@ -284,14 +395,17 @@ function getReportDataFromSpreadsheet_(spreadsheet, options) {
     dailyProfileUsage: [],
     clientProcessUsage: {},
     operatorUsage: {},
+    pieceIdMap: {},
     indicators: {
       totalCuts: 0,
       totalLength: 0,
       totalBars: 0,
       totalTimeMinutes: 0,
+      totalPieces: 0,
       totalClients: 0,
       totalProcesses: 0
     },
+    pieceIds: [],
     clientProcessSummary: [],
     clientSummary: [],
     operatorSummary: []
@@ -299,9 +413,11 @@ function getReportDataFromSpreadsheet_(spreadsheet, options) {
 
   consolidatedData.forEach(function(item) {
     var dateKey = Utilities.formatDate(item.dateTime, timezone, "yyyy-MM-dd");
+    var timestamp = item.dateTime.getTime();
     var classifiedCutType = classifyCutType(item.cutType);
     var quantity = item.quantity || 1;
     var totalLength = item.length * quantity;
+    reportData.pieceIdMap[normalizeText(item.pieceId)] = item.pieceId;
 
     reportData.indicators.totalCuts += quantity;
     reportData.indicators.totalLength += totalLength;
@@ -316,16 +432,16 @@ function getReportDataFromSpreadsheet_(spreadsheet, options) {
           "1 corte reto e 1 corte em angulo": 0,
           "2 cortes em angulo": 0
         },
-        firstCutTime: item.dateTime.getTime(),
-        lastCutTime: item.dateTime.getTime()
+        firstCutTime: timestamp,
+        lastCutTime: timestamp
       };
     }
 
     var daySummary = reportData.dailySummary[dateKey];
     daySummary.totalCuts += quantity;
     if (classifiedCutType) daySummary.cutTypes[classifiedCutType] += quantity;
-    daySummary.firstCutTime = Math.min(daySummary.firstCutTime, item.dateTime.getTime());
-    daySummary.lastCutTime = Math.max(daySummary.lastCutTime, item.dateTime.getTime());
+    daySummary.firstCutTime = Math.min(daySummary.firstCutTime, timestamp);
+    daySummary.lastCutTime = Math.max(daySummary.lastCutTime, timestamp);
 
     if (!reportData.profileBarUsage[item.profile]) {
       reportData.profileBarUsage[item.profile] = {
@@ -349,8 +465,9 @@ function getReportDataFromSpreadsheet_(spreadsheet, options) {
           "1 corte reto e 1 corte em angulo": 0,
           "2 cortes em angulo": 0
         },
-        firstCutTime: item.dateTime.getTime(),
-        lastCutTime: item.dateTime.getTime()
+        firstCutTime: timestamp,
+        lastCutTime: timestamp,
+        dailyWindows: {}
       };
     }
 
@@ -358,20 +475,23 @@ function getReportDataFromSpreadsheet_(spreadsheet, options) {
     processSummary.totalCuts += quantity;
     processSummary.totalLength += totalLength;
     if (classifiedCutType) processSummary.cutTypes[classifiedCutType] += quantity;
-    processSummary.firstCutTime = Math.min(processSummary.firstCutTime, item.dateTime.getTime());
-    processSummary.lastCutTime = Math.max(processSummary.lastCutTime, item.dateTime.getTime());
+    processSummary.firstCutTime = Math.min(processSummary.firstCutTime, timestamp);
+    processSummary.lastCutTime = Math.max(processSummary.lastCutTime, timestamp);
+    updateDailyWindow(processSummary, dateKey, timestamp);
 
     var operatorName = item.operator || "Sem operador";
     if (!reportData.operatorUsage[operatorName]) {
       reportData.operatorUsage[operatorName] = {
         totalCuts: 0,
-        firstCutTime: item.dateTime.getTime(),
-        lastCutTime: item.dateTime.getTime()
+        firstCutTime: timestamp,
+        lastCutTime: timestamp,
+        dailyWindows: {}
       };
     }
     reportData.operatorUsage[operatorName].totalCuts += quantity;
-    reportData.operatorUsage[operatorName].firstCutTime = Math.min(reportData.operatorUsage[operatorName].firstCutTime, item.dateTime.getTime());
-    reportData.operatorUsage[operatorName].lastCutTime = Math.max(reportData.operatorUsage[operatorName].lastCutTime, item.dateTime.getTime());
+    reportData.operatorUsage[operatorName].firstCutTime = Math.min(reportData.operatorUsage[operatorName].firstCutTime, timestamp);
+    reportData.operatorUsage[operatorName].lastCutTime = Math.max(reportData.operatorUsage[operatorName].lastCutTime, timestamp);
+    updateDailyWindow(reportData.operatorUsage[operatorName], dateKey, timestamp);
   });
 
   var formattedDailySummary = [];
@@ -383,7 +503,8 @@ function getReportDataFromSpreadsheet_(spreadsheet, options) {
       cuts2Retos: summary.cutTypes["2 cortes retos"],
       cuts1Reto1Angulo: summary.cutTypes["1 corte reto e 1 corte em angulo"],
       cuts2Angulos: summary.cutTypes["2 cortes em angulo"],
-      timeTaken: ((summary.lastCutTime - summary.firstCutTime) / (1000 * 60)).toFixed(2)
+      timeTaken: ((summary.lastCutTime - summary.firstCutTime) / (1000 * 60)).toFixed(2),
+      timeHours: minutesToHours((summary.lastCutTime - summary.firstCutTime) / (1000 * 60))
     });
   });
   reportData.dailySummary = formattedDailySummary;
@@ -394,6 +515,7 @@ function getReportDataFromSpreadsheet_(spreadsheet, options) {
     formattedProfileBarUsage.push({
       profile: profile,
       totalLength: usage.totalLength.toFixed(2),
+      totalLengthMeters: mmToMeters(usage.totalLength),
       totalBars: (usage.totalLength / 6000).toFixed(2)
     });
 
@@ -403,6 +525,7 @@ function getReportDataFromSpreadsheet_(spreadsheet, options) {
         profile: profile,
         date: dateKey,
         length: dailyLength.toFixed(2),
+        lengthMeters: mmToMeters(dailyLength),
         bars: (dailyLength / 6000).toFixed(2)
       });
     });
@@ -411,10 +534,12 @@ function getReportDataFromSpreadsheet_(spreadsheet, options) {
 
   Object.keys(reportData.operatorUsage).sort().forEach(function(operatorName) {
     var usage = reportData.operatorUsage[operatorName];
+    var timeMinutes = sumDailyWindowMinutes(usage.dailyWindows);
     reportData.operatorSummary.push({
       operator: operatorName,
       totalCuts: usage.totalCuts,
-      timeMinutes: ((usage.lastCutTime - usage.firstCutTime) / (1000 * 60)).toFixed(2),
+      timeMinutes: timeMinutes.toFixed(2),
+      timeHours: minutesToHours(timeMinutes),
       firstCut: Utilities.formatDate(new Date(usage.firstCutTime), timezone, "yyyy-MM-dd HH:mm:ss"),
       lastCut: Utilities.formatDate(new Date(usage.lastCutTime), timezone, "yyyy-MM-dd HH:mm:ss")
     });
@@ -434,7 +559,7 @@ function getReportDataFromSpreadsheet_(spreadsheet, options) {
     Object.keys(reportData.clientProcessUsage[client]).sort().forEach(function(process) {
       processNames[process] = true;
       var usage = reportData.clientProcessUsage[client][process];
-      var timeMinutes = (usage.lastCutTime - usage.firstCutTime) / (1000 * 60);
+      var timeMinutes = sumDailyWindowMinutes(usage.dailyWindows);
       var bars = usage.totalLength / 6000;
 
       clientTotals.totalCuts += usage.totalCuts;
@@ -451,8 +576,10 @@ function getReportDataFromSpreadsheet_(spreadsheet, options) {
         cuts1Reto1Angulo: usage.cutTypes["1 corte reto e 1 corte em angulo"],
         cuts2Angulos: usage.cutTypes["2 cortes em angulo"],
         totalLength: usage.totalLength.toFixed(2),
+        totalLengthMeters: mmToMeters(usage.totalLength),
         totalBars: bars.toFixed(2),
         timeMinutes: timeMinutes.toFixed(2),
+        timeHours: minutesToHours(timeMinutes),
         firstCut: Utilities.formatDate(new Date(usage.firstCutTime), timezone, "yyyy-MM-dd HH:mm:ss"),
         lastCut: Utilities.formatDate(new Date(usage.lastCutTime), timezone, "yyyy-MM-dd HH:mm:ss")
       });
@@ -463,20 +590,30 @@ function getReportDataFromSpreadsheet_(spreadsheet, options) {
       processes: clientTotals.processes,
       totalCuts: clientTotals.totalCuts,
       totalLength: clientTotals.totalLength.toFixed(2),
+      totalLengthMeters: mmToMeters(clientTotals.totalLength),
       totalBars: clientTotals.totalBars.toFixed(2),
-      totalTimeMinutes: clientTotals.totalTimeMinutes.toFixed(2)
+      totalTimeMinutes: clientTotals.totalTimeMinutes.toFixed(2),
+      totalTimeHours: minutesToHours(clientTotals.totalTimeMinutes)
     });
   });
 
-  reportData.indicators.totalBars = (reportData.indicators.totalLength / 6000).toFixed(2);
-  reportData.indicators.totalLength = reportData.indicators.totalLength.toFixed(2);
+  var indicatorLength = reportData.indicators.totalLength;
+  reportData.indicators.totalBars = (indicatorLength / 6000).toFixed(2);
+  reportData.indicators.totalLength = indicatorLength.toFixed(2);
+  reportData.indicators.totalLengthMeters = mmToMeters(indicatorLength);
   reportData.indicators.totalTimeMinutes = reportData.clientSummary.reduce(function(total, item) {
     return total + parseFloat(item.totalTimeMinutes || 0);
   }, 0).toFixed(2);
+  reportData.indicators.totalTimeHours = minutesToHours(reportData.indicators.totalTimeMinutes);
   reportData.indicators.totalClients = reportData.clientSummary.length;
   reportData.indicators.totalProcesses = Object.keys(processNames).length;
+  reportData.pieceIds = Object.keys(reportData.pieceIdMap).sort().map(function(pieceKey) {
+    return reportData.pieceIdMap[pieceKey];
+  });
+  reportData.indicators.totalPieces = reportData.pieceIds.length;
   delete reportData.clientProcessUsage;
   delete reportData.operatorUsage;
+  delete reportData.pieceIdMap;
 
   return reportData;
 }
@@ -485,8 +622,11 @@ function buildExtractionDiagnosticMessage(diagnostic) {
   var message = [];
   message.push("Abas na planilha: " + (diagnostic.allSheetNames.length ? diagnostic.allSheetNames.join(", ") : "nenhuma"));
   message.push("Abas candidatas com " + (diagnostic.sheetPattern || "CRT PER/USI PER") + ": " + (diagnostic.candidateSheets.length ? diagnostic.candidateSheets.join(", ") : "nenhuma"));
+  message.push("Abas ocultas lidas: " + (diagnostic.hiddenCandidateSheets.length ? diagnostic.hiddenCandidateSheets.join(", ") : "nenhuma"));
   message.push("Linhas validas encontradas: " + diagnostic.validRows);
   message.push("Linhas ignoradas: " + diagnostic.ignoredRows);
+  message.push("Linhas duplicadas ignoradas: " + diagnostic.duplicateRows);
+  message.push("Linhas sem ID PECA ignoradas: " + diagnostic.missingPieceIdRows);
 
   if (diagnostic.ignoredSheets.length) {
     message.push("Motivos: " + diagnostic.ignoredSheets.join(" | "));

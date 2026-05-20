@@ -89,9 +89,9 @@
         <th>Cliente</th>
         <th>Processos</th>
         <th>Total de Cortes</th>
-        <th>Comprimento Total (mm)</th>
+        <th>Comprimento Total (m)</th>
         <th>Total de Barras</th>
-        <th>Tempo Total de Corte (min)</th>
+        <th>Tempo Total de Corte (h)</th>
       </tr>
     </thead>
     <tbody></tbody>
@@ -107,9 +107,9 @@
         <th>2 Retos</th>
         <th>1 Reto e 1 Angulo</th>
         <th>2 Angulos</th>
-        <th>Comprimento Total (mm)</th>
+        <th>Comprimento Total (m)</th>
         <th>Total de Barras</th>
-        <th>Tempo Total (min)</th>
+        <th>Tempo Total (h)</th>
         <th>Indicador</th>
       </tr>
     </thead>
@@ -136,7 +136,7 @@
         <th>2 Retos</th>
         <th>1 Reto e 1 Angulo</th>
         <th>2 Angulos</th>
-        <th>Tempo Total (min)</th>
+        <th>Tempo Total (h)</th>
       </tr>
     </thead>
     <tbody></tbody>
@@ -147,7 +147,7 @@
     <thead>
       <tr>
         <th>Perfil</th>
-        <th>Comprimento Total (mm)</th>
+        <th>Comprimento Total (m)</th>
         <th>Total de Barras</th>
       </tr>
     </thead>
@@ -189,9 +189,9 @@
         ["Clientes", indicators.totalClients],
         ["Processos", indicators.totalProcesses],
         ["Total de Cortes", indicators.totalCuts],
-        ["Comprimento Total (mm)", indicators.totalLength],
+        ["Comprimento Total (m)", indicators.totalLengthMeters],
         ["Total de Barras", indicators.totalBars],
-        ["Tempo Total de Corte (min)", indicators.totalTimeMinutes]
+        ["Tempo Total de Corte (h)", indicators.totalTimeHours]
       ];
       var panel = document.getElementById("kpiPanel");
       panel.innerHTML = "";
@@ -208,24 +208,24 @@
       var tbody = document.getElementById("clientProcessTable").querySelector("tbody");
       tbody.innerHTML = "";
       var maxTime = data.reduce(function(max, item) {
-        return Math.max(max, parseFloat(item.timeMinutes || 0));
+        return Math.max(max, parseFloat(item.timeHours || 0));
       }, 0);
 
       data.forEach(function(item) {
         var row = tbody.insertRow();
-        ["client", "process", "totalCuts", "cuts2Retos", "cuts1Reto1Angulo", "cuts2Angulos", "totalLength", "totalBars", "timeMinutes"].forEach(function(col) {
+        ["client", "process", "totalCuts", "cuts2Retos", "cuts1Reto1Angulo", "cuts2Angulos", "totalLengthMeters", "totalBars", "timeHours"].forEach(function(col) {
           var cell = row.insertCell();
           cell.textContent = valueOrDash(item[col]);
         });
         var barCell = row.insertCell();
-        var percent = maxTime > 0 ? Math.max(3, Math.round((parseFloat(item.timeMinutes || 0) / maxTime) * 100)) : 0;
+        var percent = maxTime > 0 ? Math.max(3, Math.round((parseFloat(item.timeHours || 0) / maxTime) * 100)) : 0;
         barCell.innerHTML = "<div class='bar-track'><div class='bar-fill' style='width:" + percent + "%'></div></div>";
       });
     }
 
     renderKpis();
     populateTable("clientSummaryTable", reportData.clientSummary, [
-      "client", "processes", "totalCuts", "totalLength", "totalBars", "totalTimeMinutes"
+      "client", "processes", "totalCuts", "totalLengthMeters", "totalBars", "totalTimeHours"
     ]);
     renderClientProcessTable();
 
@@ -234,10 +234,10 @@
     });
     populateTable("cutTypeCountsTable", cutTypeCountsArray, ["type", "total"]);
     populateTable("dailySummaryTable", reportData.dailySummary, [
-      "date", "totalCuts", "cuts2Retos", "cuts1Reto1Angulo", "cuts2Angulos", "timeTaken"
+      "date", "totalCuts", "cuts2Retos", "cuts1Reto1Angulo", "cuts2Angulos", "timeHours"
     ]);
     populateTable("profileBarUsageTable", reportData.profileBarUsage, [
-      "profile", "totalLength", "totalBars"
+      "profile", "totalLengthMeters", "totalBars"
     ]);
   </script>
 </body>

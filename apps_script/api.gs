@@ -2,6 +2,7 @@ var LAGUNA_API_URL_PROPERTY = "LAGUNA_API_URL";
 var LAGUNA_API_TOKEN_PROPERTY = "LAGUNA_API_TOKEN";
 var LAGUNA_SOURCE_CATEGORY_PROPERTY = "LAGUNA_SOURCE_CATEGORY";
 var LAGUNA_SOURCE_NAME_PROPERTY = "LAGUNA_SOURCE_NAME";
+var LAGUNA_BI_API_INGEST_URL = "https://bi-lagunaportas.vercel.app/api/ingest";
 var LAGUNA_PENDING_SOURCES_SHEET = "LagunaBI_Origens_Pendentes";
 var LAGUNA_PENDING_SOURCES_HEADERS = [
   "Ativo",
@@ -102,9 +103,10 @@ function buildLagunaChartData_(reportData) {
       { label: "Clientes", value: Number(indicators.totalClients || 0) },
       { label: "Processos", value: Number(indicators.totalProcesses || 0) },
       { label: "Cortes", value: Number(indicators.totalCuts || 0) },
-      { label: "Comprimento Total (mm)", value: Number(indicators.totalLength || 0) },
+      { label: "Pecas", value: Number(indicators.totalPieces || 0) },
+      { label: "Comprimento Total (m)", value: Number(indicators.totalLengthMeters || 0) },
       { label: "Barras", value: Number(indicators.totalBars || 0) },
-      { label: "Tempo Total (min)", value: Number(indicators.totalTimeMinutes || 0) }
+      { label: "Tempo Total (h)", value: Number(indicators.totalTimeHours || 0) }
     ],
     cutDistribution: Object.keys(reportData.cutTypeCounts || {}).map(function(type) {
       return { label: type, value: Number(reportData.cutTypeCounts[type] || 0) };
@@ -112,7 +114,7 @@ function buildLagunaChartData_(reportData) {
     clientTime: (reportData.clientSummary || []).map(function(item) {
       return {
         label: item.client,
-        value: Number(item.totalTimeMinutes || 0),
+        value: Number(item.totalTimeHours || 0),
         cuts: Number(item.totalCuts || 0),
         bars: Number(item.totalBars || 0)
       };
@@ -122,7 +124,7 @@ function buildLagunaChartData_(reportData) {
         label: item.client + " | " + item.process,
         client: item.client,
         process: item.process,
-        value: Number(item.timeMinutes || 0),
+        value: Number(item.timeHours || 0),
         cuts: Number(item.totalCuts || 0),
         bars: Number(item.totalBars || 0)
       };
@@ -131,20 +133,20 @@ function buildLagunaChartData_(reportData) {
       return {
         label: item.profile,
         value: Number(item.totalBars || 0),
-        length: Number(item.totalLength || 0)
+        length: Number(item.totalLengthMeters || 0)
       };
     }),
     dailyCuts: (reportData.dailySummary || []).map(function(item) {
       return {
         label: item.date,
         value: Number(item.totalCuts || 0),
-        timeMinutes: Number(item.timeTaken || 0)
+        timeHours: Number(item.timeHours || 0)
       };
     }),
     operatorTime: (reportData.operatorSummary || []).map(function(item) {
       return {
         label: item.operator,
-        value: Number(item.timeMinutes || 0),
+        value: Number(item.timeHours || 0),
         cuts: Number(item.totalCuts || 0)
       };
     })
@@ -194,7 +196,7 @@ function getLagunaWebAppCoordinates_() {
 
 function configureLagunaExternalApi(apiUrl, apiToken) {
   var properties = PropertiesService.getScriptProperties();
-  properties.setProperty(LAGUNA_API_URL_PROPERTY, apiUrl || "");
+  properties.setProperty(LAGUNA_API_URL_PROPERTY, apiUrl || LAGUNA_BI_API_INGEST_URL);
   properties.setProperty(LAGUNA_API_TOKEN_PROPERTY, apiToken || "");
 }
 
@@ -471,7 +473,7 @@ function configureLagunaExternalApiFromMenu() {
 
 function sendLagunaBiDataToExternalApi() {
   var properties = PropertiesService.getScriptProperties();
-  var apiUrl = properties.getProperty(LAGUNA_API_URL_PROPERTY);
+  var apiUrl = properties.getProperty(LAGUNA_API_URL_PROPERTY) || LAGUNA_BI_API_INGEST_URL;
   var apiToken = properties.getProperty(LAGUNA_API_TOKEN_PROPERTY);
 
   if (!apiUrl) {
@@ -507,7 +509,7 @@ function sendLagunaBiDataToExternalApi() {
 
 function sendLagunaPendingSourcesToExternalApi() {
   var properties = PropertiesService.getScriptProperties();
-  var apiUrl = properties.getProperty(LAGUNA_API_URL_PROPERTY);
+  var apiUrl = properties.getProperty(LAGUNA_API_URL_PROPERTY) || LAGUNA_BI_API_INGEST_URL;
   var apiToken = properties.getProperty(LAGUNA_API_TOKEN_PROPERTY);
 
   if (!apiUrl) {
@@ -575,7 +577,7 @@ function testLagunaExternalApiFromMenu() {
 
 function testLagunaExternalApi_() {
   var properties = PropertiesService.getScriptProperties();
-  var apiUrl = properties.getProperty(LAGUNA_API_URL_PROPERTY);
+  var apiUrl = properties.getProperty(LAGUNA_API_URL_PROPERTY) || LAGUNA_BI_API_INGEST_URL;
   var apiToken = properties.getProperty(LAGUNA_API_TOKEN_PROPERTY);
 
   if (!apiUrl) {
@@ -585,7 +587,9 @@ function testLagunaExternalApi_() {
     };
   }
 
-  var healthUrl = apiUrl.replace(/\/api\/ingest\/?$/, "/api/health");
+  var healthUrl = apiUrl
+    .replace(/\/api\/ingest-batch\/?$/i, "/api/health")
+    .replace(/\/api\/ingest\/?$/i, "/api/health");
   var headers = {};
   if (apiToken) {
     headers.Authorization = "Bearer " + apiToken;
@@ -615,7 +619,7 @@ function sendLagunaBiDataFromMenu() {
   SpreadsheetApp.getUi().alert(
     result.ok ? "Envio concluido" : "Envio nao concluido",
     result.ok
-      ? "Dados enviados para a API externa com sucesso."
+      ? buildLagunaApiResponseMessage_(result)
       : (result.message || ("Status: " + result.statusCode + "\n" + result.responseText)),
     SpreadsheetApp.getUi().ButtonSet.OK
   );
@@ -626,10 +630,53 @@ function sendLagunaPendingSourcesToExternalApiFromMenu() {
   SpreadsheetApp.getUi().alert(
     result.ok ? "Envio em lote concluido" : "Envio em lote nao concluido",
     result.ok
-      ? "Origens enviadas: " + result.extracted + "\nStatus: " + result.statusCode + "\n\n" + result.responseText
+      ? "Origens enviadas: " + result.extracted + "\nStatus: " + result.statusCode + "\n\n" + buildLagunaApiResponseMessage_(result)
       : (result.message || ("Status: " + result.statusCode + "\n" + result.responseText)),
     SpreadsheetApp.getUi().ButtonSet.OK
   );
+}
+
+function buildLagunaApiResponseMessage_(result) {
+  var message = ["Dados enviados para a API externa com sucesso."];
+  if (!result.responseText) return message.join("\n");
+
+  try {
+    var response = JSON.parse(result.responseText);
+    if (response.validation) {
+      message.push(formatLagunaValidation_(response.validation));
+    }
+    if (response.validations && response.validations.length) {
+      response.validations.slice(0, 8).forEach(function(item) {
+        var source = item.source || {};
+        message.push((source.name || source.key || "Origem") + ":\n" + formatLagunaValidation_(item.validation));
+      });
+      if (response.validations.length > 8) {
+        message.push("Outras origens: " + (response.validations.length - 8));
+      }
+    }
+  } catch (error) {
+    message.push(result.responseText);
+  }
+
+  return message.join("\n\n");
+}
+
+function formatLagunaValidation_(validation) {
+  if (!validation) return "Validacao indisponivel.";
+  var delta = validation.delta || {};
+  var pieces = validation.pieceIds || {};
+  return [
+    "Leitura anterior: " + (validation.hasPreviousRead ? "sim" : "nao"),
+    "Leitura repetida: " + (validation.isRepeatRead ? "sim" : "nao"),
+    "Novos cortes: " + (delta.cuts || 0),
+    "Novas pecas: " + (delta.pieces || 0),
+    "Novos metros: " + (delta.lengthMeters || 0),
+    "Novas horas: " + (delta.timeHours || 0),
+    "Pecas atuais: " + (pieces.current || 0),
+    "Pecas novas por ID: " + (pieces.new || 0),
+    "Pecas repetidas por ID: " + (pieces.repeated || 0),
+    "Pecas removidas por ID: " + (pieces.removed || 0)
+  ].join("\n");
 }
 
 function getApiRoute_(e) {

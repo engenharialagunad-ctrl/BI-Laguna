@@ -100,7 +100,7 @@ def source_metrics(payload: Dict[str, Any] | None) -> Dict[str, float]:
     total_time = to_number(indicators.get("totalTimeHours")) or to_number(indicators.get("totalTimeMinutes")) / 60
     pieces = piece_id_set(payload)
     return {
-        "cuts": float(indicators.get("totalCuts") or 0),
+        "cuts": to_number(indicators.get("totalCuts")),
         "pieces": float(len(pieces) or to_number(indicators.get("totalPieces"))),
         "lengthMeters": round(total_length, 2),
         "timeHours": round(total_time, 2),
