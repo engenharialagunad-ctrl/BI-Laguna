@@ -43,6 +43,32 @@ def minutes_to_hours(value: Any) -> float:
     return round(to_number(value) / 60, 2)
 
 
+def key_text(value: Any) -> str:
+    text = str(value or "-").strip().lower()
+    text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
+    text = re.sub(r"\s+", " ", text)
+    return text or "-"
+
+
+def add_number(target: Dict[str, Any], field: str, value: Any, digits: int = 2) -> None:
+    target[field] = round(to_number(target.get(field)) + to_number(value), digits)
+
+
+def enrich_metric_units(row: Dict[str, Any]) -> Dict[str, Any]:
+    enriched = dict(row)
+    if "totalLength" in enriched:
+        enriched.setdefault("totalLengthMeters", mm_to_meters(enriched.get("totalLength")))
+    if "length" in enriched:
+        enriched.setdefault("lengthMeters", mm_to_meters(enriched.get("length")))
+    if "totalTimeMinutes" in enriched:
+        enriched.setdefault("totalTimeHours", minutes_to_hours(enriched.get("totalTimeMinutes")))
+    if "timeMinutes" in enriched:
+        enriched.setdefault("timeHours", minutes_to_hours(enriched.get("timeMinutes")))
+    if "timeTaken" in enriched:
+        enriched.setdefault("timeHours", minutes_to_hours(enriched.get("timeTaken")))
+    return enriched
+
+
 def slugify(value: Any) -> str:
     text = str(value or "origem").strip().lower()
     text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
@@ -225,6 +251,9 @@ def aggregate_payloads(payloads: List[Dict[str, Any]]) -> Dict[str, Any]:
     categories = set()
     clients = set()
     processes = set()
+    client_summaries: Dict[Tuple[str, str], Dict[str, Any]] = {}
+    process_summaries: Dict[Tuple[str, str, str], Dict[str, Any]] = {}
+    client_process_sets: Dict[Tuple[str, str], set[str]] = {}
 
     for payload in payloads:
         source = payload.get("source") or get_source_metadata(payload)
@@ -248,33 +277,87 @@ def aggregate_payloads(payloads: List[Dict[str, Any]]) -> Dict[str, Any]:
             combined_data["cutTypeCounts"][cut_type] = combined_data["cutTypeCounts"].get(cut_type, 0) + to_number(value)
 
         for row in data.get("clientSummary", []) or []:
-            enriched = with_source(row, source)
-            enriched.setdefault("totalLengthMeters", mm_to_meters(enriched.get("totalLength")))
-            enriched.setdefault("totalTimeHours", minutes_to_hours(enriched.get("totalTimeMinutes")))
-            enriched["clientLabel"] = f"{source.get('category', 'Geral')} | {row.get('client', '-')}"
-            clients.add((source.get("category", "Geral"), row.get("client", "-")))
-            combined_data["clientSummary"].append(enriched)
+            enriched = enrich_metric_units(with_source(row, source))
+            category_name = source.get("category", "Geral")
+            client_name = row.get("client", "-")
+            client_key = (key_text(category_name), key_text(client_name))
+            clients.add(key_text(client_name))
+
+            if client_key not in client_summaries:
+                client_summaries[client_key] = {
+                    **enriched,
+                    "client": client_name,
+                    "clientLabel": f"{category_name} | {client_name}",
+                    "processes": 0,
+                    "totalCuts": 0,
+                    "totalLength": 0,
+                    "totalLengthMeters": 0,
+                    "totalBars": 0,
+                    "totalTimeMinutes": 0,
+                    "totalTimeHours": 0,
+                }
+            target = client_summaries[client_key]
+            add_number(target, "totalCuts", enriched.get("totalCuts"), 0)
+            add_number(target, "totalLength", enriched.get("totalLength"))
+            add_number(target, "totalLengthMeters", enriched.get("totalLengthMeters"))
+            add_number(target, "totalBars", enriched.get("totalBars"))
+            add_number(target, "totalTimeMinutes", enriched.get("totalTimeMinutes"))
+            add_number(target, "totalTimeHours", enriched.get("totalTimeHours"))
 
         for row in data.get("clientProcessSummary", []) or []:
-            enriched = with_source(row, source)
-            enriched.setdefault("totalLengthMeters", mm_to_meters(enriched.get("totalLength")))
-            enriched.setdefault("timeHours", minutes_to_hours(enriched.get("timeMinutes")))
-            enriched["processLabel"] = f"{source.get('category', 'Geral')} | {row.get('client', '-')} | {row.get('process', '-')}"
-            processes.add((source.get("category", "Geral"), row.get("process", "-")))
-            combined_data["clientProcessSummary"].append(enriched)
+            enriched = enrich_metric_units(with_source(row, source))
+            category_name = source.get("category", "Geral")
+            client_name = row.get("client", "-")
+            process_name = row.get("process", "-")
+            client_key = (key_text(category_name), key_text(client_name))
+            process_key = (key_text(category_name), key_text(client_name), key_text(process_name))
+            clients.add(key_text(client_name))
+            processes.add((key_text(category_name), key_text(process_name)))
+            client_process_sets.setdefault(client_key, set()).add(key_text(process_name))
+
+            if process_key not in process_summaries:
+                process_summaries[process_key] = {
+                    **enriched,
+                    "client": client_name,
+                    "process": process_name,
+                    "processLabel": f"{category_name} | {client_name} | {process_name}",
+                    "totalCuts": 0,
+                    "cuts2Retos": 0,
+                    "cuts1Reto1Angulo": 0,
+                    "cuts2Angulos": 0,
+                    "totalLength": 0,
+                    "totalLengthMeters": 0,
+                    "totalBars": 0,
+                    "timeMinutes": 0,
+                    "timeHours": 0,
+                }
+            target = process_summaries[process_key]
+            for field in ["totalCuts", "cuts2Retos", "cuts1Reto1Angulo", "cuts2Angulos"]:
+                add_number(target, field, enriched.get(field), 0)
+            for field in ["totalLength", "totalLengthMeters", "totalBars", "timeMinutes", "timeHours"]:
+                add_number(target, field, enriched.get(field))
+            if enriched.get("firstCut") and (not target.get("firstCut") or str(enriched.get("firstCut")) < str(target.get("firstCut"))):
+                target["firstCut"] = enriched.get("firstCut")
+            if enriched.get("lastCut") and (not target.get("lastCut") or str(enriched.get("lastCut")) > str(target.get("lastCut"))):
+                target["lastCut"] = enriched.get("lastCut")
 
         for key in ["dailySummary", "profileBarUsage", "dailyProfileUsage", "operatorSummary"]:
             for row in data.get(key, []) or []:
-                enriched = with_source(row, source)
-                if key == "dailySummary":
-                    enriched.setdefault("timeHours", minutes_to_hours(enriched.get("timeTaken")))
-                elif key == "profileBarUsage":
-                    enriched.setdefault("totalLengthMeters", mm_to_meters(enriched.get("totalLength")))
-                elif key == "dailyProfileUsage":
-                    enriched.setdefault("lengthMeters", mm_to_meters(enriched.get("length")))
-                elif key == "operatorSummary":
-                    enriched.setdefault("timeHours", minutes_to_hours(enriched.get("timeMinutes")))
+                enriched = enrich_metric_units(with_source(row, source))
                 combined_data[key].append(enriched)
+
+    for key, processes_for_client in client_process_sets.items():
+        if key in client_summaries:
+            client_summaries[key]["processes"] = len(processes_for_client)
+
+    combined_data["clientSummary"] = sorted(
+        client_summaries.values(),
+        key=lambda item: (str(item.get("sourceCategory", "")), str(item.get("client", ""))),
+    )
+    combined_data["clientProcessSummary"] = sorted(
+        process_summaries.values(),
+        key=lambda item: (str(item.get("sourceCategory", "")), str(item.get("client", "")), str(item.get("process", ""))),
+    )
 
     combined_data["indicators"]["totalClients"] = len(clients)
     combined_data["indicators"]["totalProcesses"] = len(processes)

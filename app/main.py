@@ -10,7 +10,7 @@ from fastapi.templating import Jinja2Templates
 
 from app.config import ALLOWED_ORIGINS, APP_NAME, BASE_DIR, INGEST_TOKEN, PAYLOAD_PATH, SOURCE_URL, SOURCES_DIR
 from app.storage import read_json, read_json_files, utc_now_iso, write_json
-from app.transform import aggregate_payloads, normalize_payload
+from app.transform import aggregate_payloads, normalize_payload, to_number
 
 
 app = FastAPI(title=APP_NAME)
@@ -93,6 +93,35 @@ def rebuild_combined_payload() -> Dict[str, Any]:
     return combined
 
 
+def source_metrics(payload: Dict[str, Any] | None) -> Dict[str, float]:
+    data = (payload or {}).get("data") or {}
+    indicators = data.get("indicators") or {}
+    total_length = to_number(indicators.get("totalLengthMeters")) or to_number(indicators.get("totalLength")) / 1000
+    total_time = to_number(indicators.get("totalTimeHours")) or to_number(indicators.get("totalTimeMinutes")) / 60
+    return {
+        "cuts": float(indicators.get("totalCuts") or 0),
+        "lengthMeters": round(total_length, 2),
+        "timeHours": round(total_time, 2),
+    }
+
+
+def build_ingest_validation(previous: Dict[str, Any] | None, current: Dict[str, Any]) -> Dict[str, Any]:
+    previous_metrics = source_metrics(previous)
+    current_metrics = source_metrics(current)
+    has_previous = previous is not None
+    return {
+        "hasPreviousRead": has_previous,
+        "isRepeatRead": has_previous and previous_metrics == current_metrics,
+        "previous": previous_metrics,
+        "current": current_metrics,
+        "delta": {
+            "cuts": current_metrics["cuts"] - previous_metrics["cuts"],
+            "lengthMeters": round(current_metrics["lengthMeters"] - previous_metrics["lengthMeters"], 2),
+            "timeHours": round(current_metrics["timeHours"] - previous_metrics["timeHours"], 2),
+        },
+    }
+
+
 def get_batch_payloads(payload: Any) -> list[Dict[str, Any]]:
     if isinstance(payload, list):
         return [item for item in payload if isinstance(item, dict)]
@@ -130,7 +159,8 @@ def get_data(
     elif source or category:
         payload = aggregate_payloads([])
     else:
-        payload = read_json(PAYLOAD_PATH) or aggregate_payloads(all_source_payloads()) or empty_payload()
+        source_payloads = all_source_payloads()
+        payload = aggregate_payloads(source_payloads) if source_payloads else (read_json(PAYLOAD_PATH) or empty_payload())
     return JSONResponse(payload)
 
 
@@ -157,12 +187,15 @@ async def ingest(
     require_ingest_token(authorization, x_laguna_token)
     payload = await request.json()
     normalized = normalize_payload(payload)
+    previous = read_json(source_path(normalized["source"]["key"]))
+    validation = build_ingest_validation(previous, normalized)
     write_json(source_path(normalized["source"]["key"]), normalized)
     rebuild_combined_payload()
     return {
         "ok": True,
         "message": "Dados recebidos pelo BI Laguna.",
         "source": normalized["source"],
+        "validation": validation,
         "receivedAt": normalized["receivedAt"],
     }
 
@@ -180,10 +213,17 @@ async def ingest_batch(
         raise HTTPException(status_code=400, detail="Envie uma lista de payloads em 'payloads', 'sources' ou no corpo JSON.")
 
     received_sources = []
+    validations = []
     for item in items:
         normalized = normalize_payload(item)
+        previous = read_json(source_path(normalized["source"]["key"]))
+        validation = build_ingest_validation(previous, normalized)
         write_json(source_path(normalized["source"]["key"]), normalized)
         received_sources.append(normalized["source"])
+        validations.append({
+            "source": normalized["source"],
+            "validation": validation,
+        })
 
     combined = rebuild_combined_payload()
     return {
@@ -191,6 +231,7 @@ async def ingest_batch(
         "message": "Lote recebido pelo BI Laguna.",
         "received": len(received_sources),
         "sources": received_sources,
+        "validations": validations,
         "combinedSources": len(combined.get("sources", [])),
         "receivedAt": combined.get("receivedAt"),
     }

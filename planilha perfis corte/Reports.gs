@@ -40,8 +40,10 @@ function getReportDataFromSpreadsheet_(spreadsheet, options) {
     hiddenCandidateSheets: [],
     ignoredSheets: [],
     validRows: 0,
-    ignoredRows: 0
+    ignoredRows: 0,
+    duplicateRows: 0
   };
+  var seenRowKeys = {};
 
   function normalizeText(value) {
     if (value === null || value === undefined) return "";
@@ -126,6 +128,10 @@ function getReportDataFromSpreadsheet_(spreadsheet, options) {
       var quantityCol = findExactColumnIndex(headers, ["qtd", "quantidade", "qtde"]);
       var clientCol = findRequiredColumnIndex(headers, ["cliente"], ["cliente", "client"]);
       var processCol = findRequiredColumnIndex(headers, ["usinagem"], ["usinagem", "processo", "process"]);
+      var orderCol = findRequiredColumnIndex(headers, ["pedido"], ["pedido", "order"]);
+      var environmentCol = findRequiredColumnIndex(headers, ["ambiente"], ["ambiente", "environment"]);
+      var pieceIdCol = findRequiredColumnIndex(headers, ["id peca", "id peça"], ["id peca", "id peça", "peca", "peça"]);
+      var doorCol = findRequiredColumnIndex(headers, ["porta"], ["porta", "door"]);
 
       if (dateTimeCol !== -1 && cutTypeCol !== -1 && profileCol !== -1 && lengthCol !== -1) {
         return {
@@ -136,7 +142,11 @@ function getReportDataFromSpreadsheet_(spreadsheet, options) {
           lengthCol: lengthCol,
           quantityCol: quantityCol,
           clientCol: clientCol,
-          processCol: processCol
+          processCol: processCol,
+          orderCol: orderCol,
+          environmentCol: environmentCol,
+          pieceIdCol: pieceIdCol,
+          doorCol: doorCol
         };
       }
     }
@@ -236,6 +246,25 @@ function getReportDataFromSpreadsheet_(spreadsheet, options) {
     return "";
   }
 
+  function getOptionalCellValue(rawRow, displayRow, columnIndex) {
+    if (columnIndex === -1) return "";
+    return String(displayRow[columnIndex] || rawRow[columnIndex] || "").trim();
+  }
+
+  function buildRowKey(item) {
+    var baseKey = item.pieceId
+      ? ["peca", item.pieceId, item.process]
+      : ["linha", item.dateTime.getTime(), item.client, item.process, item.environment, item.door];
+    return baseKey.concat([
+      item.cutType,
+      item.profile,
+      item.length,
+      item.quantity
+    ]).map(function(value) {
+      return normalizeText(value);
+    }).join("|");
+  }
+
   diagnostic.sheetPattern = getSheetPatternLabel();
 
   allSheets.forEach(function(sheet) {
@@ -281,6 +310,10 @@ function getReportDataFromSpreadsheet_(spreadsheet, options) {
       var process = headerInfo.processCol === -1
         ? "Sem processo"
         : String(displayRow[headerInfo.processCol] || rawRow[headerInfo.processCol] || "Sem processo").trim();
+      var order = getOptionalCellValue(rawRow, displayRow, headerInfo.orderCol);
+      var environment = getOptionalCellValue(rawRow, displayRow, headerInfo.environmentCol);
+      var pieceId = getOptionalCellValue(rawRow, displayRow, headerInfo.pieceIdCol);
+      var door = getOptionalCellValue(rawRow, displayRow, headerInfo.doorCol);
 
       if (!dateTime || !cutType || !profile || isNaN(length) || isNaN(quantity)) {
         diagnostic.ignoredRows++;
@@ -289,8 +322,7 @@ function getReportDataFromSpreadsheet_(spreadsheet, options) {
       }
 
       if (quantity <= 0) quantity = 1;
-      diagnostic.validRows++;
-      consolidatedData.push({
+      var rowItem = {
         dateTime: dateTime,
         cutType: cutType,
         profile: profile,
@@ -299,8 +331,20 @@ function getReportDataFromSpreadsheet_(spreadsheet, options) {
         client: client || "Sem cliente",
         process: process || "Sem processo",
         operator: parseBipadoOperator(displayRow[headerInfo.dateTimeCol] || rawRow[headerInfo.dateTimeCol]),
-        sheetName: sheetName
-      });
+        sheetName: sheetName,
+        order: order,
+        environment: environment,
+        pieceId: pieceId,
+        door: door
+      };
+      var rowKey = buildRowKey(rowItem);
+      if (seenRowKeys[rowKey]) {
+        diagnostic.duplicateRows++;
+        continue;
+      }
+      seenRowKeys[rowKey] = true;
+      diagnostic.validRows++;
+      consolidatedData.push(rowItem);
     }
   });
 
@@ -534,6 +578,7 @@ function buildExtractionDiagnosticMessage(diagnostic) {
   message.push("Abas ocultas lidas: " + (diagnostic.hiddenCandidateSheets.length ? diagnostic.hiddenCandidateSheets.join(", ") : "nenhuma"));
   message.push("Linhas validas encontradas: " + diagnostic.validRows);
   message.push("Linhas ignoradas: " + diagnostic.ignoredRows);
+  message.push("Linhas duplicadas ignoradas: " + diagnostic.duplicateRows);
 
   if (diagnostic.ignoredSheets.length) {
     message.push("Motivos: " + diagnostic.ignoredSheets.join(" | "));

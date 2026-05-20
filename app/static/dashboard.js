@@ -169,8 +169,8 @@ function render(payload) {
         ${renderBars("Barras por perfil", charts.profileBars, 10)}
       </section>
       <section class="grid">
-        ${renderTable("Resumo por cliente", ["Cliente", "Processos", "Cortes", "Barras", "Tempo (h)"], data.clientSummary, ["client", "processes", "totalCuts", "totalBars", "totalTimeHours"])}
-        ${renderTable("Processos", ["Cliente", "Processo", "Cortes", "Comprimento (m)", "Barras", "Tempo (h)"], data.clientProcessSummary, ["client", "process", "totalCuts", "totalLengthMeters", "totalBars", "timeHours"])}
+        ${renderTable("Resumo por cliente", ["Categoria", "Cliente", "Cortes", "Metros", "Tempo (h)"], data.clientSummary, ["sourceCategory", "client", "totalCuts", "totalLengthMeters", "totalTimeHours"])}
+        ${renderTable("Resumo por processo", ["Categoria", "Cliente", "Processo", "Cortes", "Metros", "Tempo (h)"], data.clientProcessSummary, ["sourceCategory", "client", "process", "totalCuts", "totalLengthMeters", "timeHours"])}
       </section>
     </section>
   `;
