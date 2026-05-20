@@ -37,6 +37,7 @@ function getReportDataFromSpreadsheet_(spreadsheet, options) {
   var diagnostic = {
     allSheetNames: [],
     candidateSheets: [],
+    hiddenCandidateSheets: [],
     ignoredSheets: [],
     validRows: 0,
     ignoredRows: 0
@@ -57,6 +58,14 @@ function getReportDataFromSpreadsheet_(spreadsheet, options) {
     return resultSheetNames.some(function(name) {
       return normalizeText(name) === normalizedName;
     });
+  }
+
+  function isSheetHidden_(sheet) {
+    try {
+      return typeof sheet.isSheetHidden === "function" && sheet.isSheetHidden();
+    } catch (error) {
+      return false;
+    }
   }
 
   function isDataSheet(sheetName) {
@@ -231,12 +240,15 @@ function getReportDataFromSpreadsheet_(spreadsheet, options) {
 
   allSheets.forEach(function(sheet) {
     var sheetName = sheet.getName();
+    var isHiddenSheet = isSheetHidden_(sheet);
+    var sheetLabel = sheetName + (isHiddenSheet ? " (oculta)" : "");
     diagnostic.allSheetNames.push(sheetName);
 
     if (isResultSheet(sheetName)) return;
     if (!isDataSheet(sheetName)) return;
 
-    diagnostic.candidateSheets.push(sheetName);
+    diagnostic.candidateSheets.push(sheetLabel);
+    if (isHiddenSheet) diagnostic.hiddenCandidateSheets.push(sheetName);
     if (sheet.getLastRow() < 2 || sheet.getLastColumn() < 1) {
       diagnostic.ignoredSheets.push(sheetName + ": aba vazia ou sem linhas de dados");
       return;
@@ -519,6 +531,7 @@ function buildExtractionDiagnosticMessage(diagnostic) {
   var message = [];
   message.push("Abas na planilha: " + (diagnostic.allSheetNames.length ? diagnostic.allSheetNames.join(", ") : "nenhuma"));
   message.push("Abas candidatas com " + (diagnostic.sheetPattern || "CRT PER/USI PER") + ": " + (diagnostic.candidateSheets.length ? diagnostic.candidateSheets.join(", ") : "nenhuma"));
+  message.push("Abas ocultas lidas: " + (diagnostic.hiddenCandidateSheets.length ? diagnostic.hiddenCandidateSheets.join(", ") : "nenhuma"));
   message.push("Linhas validas encontradas: " + diagnostic.validRows);
   message.push("Linhas ignoradas: " + diagnostic.ignoredRows);
 

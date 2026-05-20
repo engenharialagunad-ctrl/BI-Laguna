@@ -9,6 +9,7 @@ Use esta origem para planilhas como a do print enviado, com varias abas iniciand
 - Categoria do BI: `Usinagem`
 - Abas lidas: somente abas com nome contendo `USI PER`
 - Abas `CRT PER` nao entram nesta origem
+- Abas `USI PER` ocultas tambem sao lidas normalmente
 
 Colunas esperadas:
 

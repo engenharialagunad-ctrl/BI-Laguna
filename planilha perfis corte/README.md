@@ -9,6 +9,7 @@ Use esta pasta para os arquivos do Apps Script ligados a planilha que trabalha c
 - Categoria do BI: `Cortes`
 - Abas lidas: somente abas com nome contendo `CRT PER`
 - Abas `USI PER` nao entram nesta origem
+- Abas `CRT PER` ocultas tambem sao lidas normalmente
 
 Colunas usadas:
 
