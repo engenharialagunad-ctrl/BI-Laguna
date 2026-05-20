@@ -106,6 +106,7 @@ function buildLagunaChartData_(reportData) {
       { label: "Clientes", value: Number(indicators.totalClients || 0) },
       { label: "Processos", value: Number(indicators.totalProcesses || 0) },
       { label: "Cortes", value: Number(indicators.totalCuts || 0) },
+      { label: "Pecas", value: Number(indicators.totalPieces || 0) },
       { label: "Comprimento Total (m)", value: Number(indicators.totalLengthMeters || 0) },
       { label: "Barras", value: Number(indicators.totalBars || 0) },
       { label: "Tempo Total (h)", value: Number(indicators.totalTimeHours || 0) }
@@ -680,12 +681,17 @@ function buildLagunaApiResponseMessage_(result) {
 function formatLagunaValidation_(validation) {
   if (!validation) return "Validacao indisponivel.";
   var delta = validation.delta || {};
+  var pieces = validation.pieceIds || {};
   return [
     "Leitura anterior: " + (validation.hasPreviousRead ? "sim" : "nao"),
     "Leitura repetida: " + (validation.isRepeatRead ? "sim" : "nao"),
     "Novos cortes: " + (delta.cuts || 0),
     "Novos metros: " + (delta.lengthMeters || 0),
-    "Novas horas: " + (delta.timeHours || 0)
+    "Novas horas: " + (delta.timeHours || 0),
+    "Pecas atuais: " + (pieces.current || 0),
+    "Pecas novas por ID: " + (pieces.new || 0),
+    "Pecas repetidas por ID: " + (pieces.repeated || 0),
+    "Pecas removidas por ID: " + (pieces.removed || 0)
   ].join("\n");
 }
 

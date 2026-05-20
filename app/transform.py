@@ -43,6 +43,27 @@ def minutes_to_hours(value: Any) -> float:
     return round(to_number(value) / 60, 2)
 
 
+def piece_id_set(payload_or_data: Dict[str, Any] | None) -> set[str]:
+    data = (payload_or_data or {}).get("data") if isinstance(payload_or_data, dict) else {}
+    if not isinstance(data, dict):
+        data = payload_or_data or {}
+
+    values = data.get("pieceIds") or data.get("pieceIDs") or data.get("pieces") or []
+    if isinstance(values, dict):
+        values = list(values.keys())
+    elif isinstance(values, (set, tuple)):
+        values = list(values)
+    elif not isinstance(values, list):
+        return set()
+
+    ids = set()
+    for value in values:
+        piece_key = key_text(value)
+        if piece_key and piece_key != "-":
+            ids.add(piece_key)
+    return ids
+
+
 def key_text(value: Any) -> str:
     text = str(value or "-").strip().lower()
     text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
@@ -128,6 +149,7 @@ def build_charts(data: Dict[str, Any]) -> Dict[str, List[Dict[str, Any]]]:
             chart_item("Clientes", indicators.get("totalClients")),
             chart_item("Processos", indicators.get("totalProcesses")),
             chart_item("Cortes", indicators.get("totalCuts")),
+            chart_item("Pecas", indicators.get("totalPieces")),
             chart_item("Comprimento Total (m)", indicators.get("totalLengthMeters") or mm_to_meters(indicators.get("totalLength"))),
             chart_item("Barras", indicators.get("totalBars")),
             chart_item("Tempo Total (h)", indicators.get("totalTimeHours") or minutes_to_hours(indicators.get("totalTimeMinutes"))),
@@ -206,6 +228,9 @@ def normalize_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
     normalized["payloadType"] = "source"
     normalized["category"] = source["category"]
     normalized["source"] = source
+    pieces = piece_id_set(data)
+    if pieces:
+        data.setdefault("indicators", {})["totalPieces"] = len(pieces)
     normalized["data"] = data
     normalized["charts"] = payload.get("charts") or build_charts(data)
     return normalized
@@ -233,6 +258,7 @@ def aggregate_payloads(payloads: List[Dict[str, Any]]) -> Dict[str, Any]:
             "totalBars": 0,
             "totalTimeMinutes": 0,
             "totalTimeHours": 0,
+            "totalPieces": 0,
             "totalClients": 0,
             "totalProcesses": 0,
             "totalSources": 0,
@@ -245,12 +271,15 @@ def aggregate_payloads(payloads: List[Dict[str, Any]]) -> Dict[str, Any]:
         "clientProcessSummary": [],
         "clientSummary": [],
         "operatorSummary": [],
+        "pieceIds": [],
     }
 
     sources: List[Dict[str, str]] = []
     categories = set()
     clients = set()
     processes = set()
+    pieces = set()
+    fallback_total_pieces = 0
     client_summaries: Dict[Tuple[str, str], Dict[str, Any]] = {}
     process_summaries: Dict[Tuple[str, str, str], Dict[str, Any]] = {}
     client_process_sets: Dict[Tuple[str, str], set[str]] = {}
@@ -259,9 +288,14 @@ def aggregate_payloads(payloads: List[Dict[str, Any]]) -> Dict[str, Any]:
         source = payload.get("source") or get_source_metadata(payload)
         data = payload.get("data") or {}
         indicators = data.get("indicators") or {}
+        payload_pieces = piece_id_set(payload)
 
         sources.append(source)
         categories.add(source.get("category", "Geral"))
+        if payload_pieces:
+            pieces.update(payload_pieces)
+        else:
+            fallback_total_pieces += to_number(indicators.get("totalPieces"))
         combined_data["indicators"]["totalCuts"] += to_number(indicators.get("totalCuts"))
         combined_data["indicators"]["totalLength"] += to_number(indicators.get("totalLength"))
         combined_data["indicators"]["totalLengthMeters"] += to_number(
@@ -363,11 +397,13 @@ def aggregate_payloads(payloads: List[Dict[str, Any]]) -> Dict[str, Any]:
     combined_data["indicators"]["totalProcesses"] = len(processes)
     combined_data["indicators"]["totalSources"] = len(sources)
     combined_data["indicators"]["totalCategories"] = len(categories)
+    combined_data["indicators"]["totalPieces"] = len(pieces) + int(fallback_total_pieces)
     combined_data["indicators"]["totalLength"] = round(combined_data["indicators"]["totalLength"], 2)
     combined_data["indicators"]["totalLengthMeters"] = round(combined_data["indicators"]["totalLengthMeters"], 2)
     combined_data["indicators"]["totalBars"] = round(combined_data["indicators"]["totalBars"], 2)
     combined_data["indicators"]["totalTimeMinutes"] = round(combined_data["indicators"]["totalTimeMinutes"], 2)
     combined_data["indicators"]["totalTimeHours"] = round(combined_data["indicators"]["totalTimeHours"], 2)
+    combined_data["pieceIds"] = sorted(pieces)
 
     generated_at = max((payload.get("generatedAt") or payload.get("receivedAt") or "") for payload in payloads)
     return {

@@ -10,7 +10,7 @@ from fastapi.templating import Jinja2Templates
 
 from app.config import ALLOWED_ORIGINS, APP_NAME, BASE_DIR, INGEST_TOKEN, PAYLOAD_PATH, SOURCE_URL, SOURCES_DIR
 from app.storage import read_json, read_json_files, utc_now_iso, write_json
-from app.transform import aggregate_payloads, normalize_payload, to_number
+from app.transform import aggregate_payloads, normalize_payload, piece_id_set, to_number
 
 
 app = FastAPI(title=APP_NAME)
@@ -98,8 +98,10 @@ def source_metrics(payload: Dict[str, Any] | None) -> Dict[str, float]:
     indicators = data.get("indicators") or {}
     total_length = to_number(indicators.get("totalLengthMeters")) or to_number(indicators.get("totalLength")) / 1000
     total_time = to_number(indicators.get("totalTimeHours")) or to_number(indicators.get("totalTimeMinutes")) / 60
+    pieces = piece_id_set(payload)
     return {
         "cuts": float(indicators.get("totalCuts") or 0),
+        "pieces": float(len(pieces) or to_number(indicators.get("totalPieces"))),
         "lengthMeters": round(total_length, 2),
         "timeHours": round(total_time, 2),
     }
@@ -108,16 +110,28 @@ def source_metrics(payload: Dict[str, Any] | None) -> Dict[str, float]:
 def build_ingest_validation(previous: Dict[str, Any] | None, current: Dict[str, Any]) -> Dict[str, Any]:
     previous_metrics = source_metrics(previous)
     current_metrics = source_metrics(current)
+    previous_pieces = piece_id_set(previous)
+    current_pieces = piece_id_set(current)
+    has_piece_ids = bool(previous_pieces or current_pieces)
     has_previous = previous is not None
     return {
         "hasPreviousRead": has_previous,
-        "isRepeatRead": has_previous and previous_metrics == current_metrics,
+        "isRepeatRead": has_previous and previous_metrics == current_metrics and (not has_piece_ids or previous_pieces == current_pieces),
         "previous": previous_metrics,
         "current": current_metrics,
         "delta": {
             "cuts": current_metrics["cuts"] - previous_metrics["cuts"],
+            "pieces": current_metrics["pieces"] - previous_metrics["pieces"],
             "lengthMeters": round(current_metrics["lengthMeters"] - previous_metrics["lengthMeters"], 2),
             "timeHours": round(current_metrics["timeHours"] - previous_metrics["timeHours"], 2),
+        },
+        "pieceIds": {
+            "previous": len(previous_pieces),
+            "current": len(current_pieces),
+            "new": len(current_pieces - previous_pieces),
+            "repeated": len(current_pieces & previous_pieces),
+            "removed": len(previous_pieces - current_pieces),
+            "sampleNew": sorted(current_pieces - previous_pieces)[:20],
         },
     }
 

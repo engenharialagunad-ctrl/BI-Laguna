@@ -41,7 +41,8 @@ function getReportDataFromSpreadsheet_(spreadsheet, options) {
     ignoredSheets: [],
     validRows: 0,
     ignoredRows: 0,
-    duplicateRows: 0
+    duplicateRows: 0,
+    missingPieceIdRows: 0
   };
   var seenRowKeys = {};
 
@@ -133,7 +134,7 @@ function getReportDataFromSpreadsheet_(spreadsheet, options) {
       var pieceIdCol = findRequiredColumnIndex(headers, ["id peca", "id peça"], ["id peca", "id peça", "peca", "peça"]);
       var doorCol = findRequiredColumnIndex(headers, ["porta"], ["porta", "door"]);
 
-      if (dateTimeCol !== -1 && cutTypeCol !== -1 && profileCol !== -1 && lengthCol !== -1) {
+      if (dateTimeCol !== -1 && cutTypeCol !== -1 && profileCol !== -1 && lengthCol !== -1 && pieceIdCol !== -1) {
         return {
           rowIndex: rowIndex,
           dateTimeCol: dateTimeCol,
@@ -273,15 +274,24 @@ function getReportDataFromSpreadsheet_(spreadsheet, options) {
   }
 
   function buildRowKey(item) {
-    var baseKey = item.pieceId
-      ? ["peca", item.pieceId, item.process]
-      : ["linha", item.dateTime.getTime(), item.client, item.process, item.environment, item.door];
-    return baseKey.concat([
+    if (item.pieceId) {
+      return ["peca", item.pieceId].map(function(value) {
+        return normalizeText(value);
+      }).join("|");
+    }
+
+    return [
+      "linha",
+      item.dateTime.getTime(),
+      item.client,
+      item.process,
+      item.environment,
+      item.door,
       item.cutType,
       item.profile,
       item.length,
       item.quantity
-    ]).map(function(value) {
+    ].map(function(value) {
       return normalizeText(value);
     }).join("|");
   }
@@ -310,7 +320,7 @@ function getReportDataFromSpreadsheet_(spreadsheet, options) {
     var headerInfo = findHeaderInfo(displayValues);
 
     if (!headerInfo) {
-      diagnostic.ignoredSheets.push(sheetName + ": cabecalhos BIPADO, CORTE, PERFIL 2 e COMP nao encontrados nas primeiras 20 linhas");
+      diagnostic.ignoredSheets.push(sheetName + ": cabecalhos BIPADO, CORTE, PERFIL 2, COMP e ID PECA nao encontrados nas primeiras 20 linhas");
       Logger.log("Aba " + sheetName + " ignorada: cabecalhos obrigatorios nao encontrados.");
       return;
     }
@@ -336,8 +346,9 @@ function getReportDataFromSpreadsheet_(spreadsheet, options) {
       var pieceId = getOptionalCellValue(rawRow, displayRow, headerInfo.pieceIdCol);
       var door = getOptionalCellValue(rawRow, displayRow, headerInfo.doorCol);
 
-      if (!dateTime || !cutType || !profile || isNaN(length) || isNaN(quantity)) {
+      if (!dateTime || !cutType || !profile || isNaN(length) || isNaN(quantity) || !pieceId) {
         diagnostic.ignoredRows++;
+        if (!pieceId) diagnostic.missingPieceIdRows++;
         Logger.log("Linha ignorada em " + sheetName + " linha " + (rowIndex + 1) + ": dados incompletos ou invalidos.");
         continue;
       }
@@ -384,14 +395,17 @@ function getReportDataFromSpreadsheet_(spreadsheet, options) {
     dailyProfileUsage: [],
     clientProcessUsage: {},
     operatorUsage: {},
+    pieceIdMap: {},
     indicators: {
       totalCuts: 0,
       totalLength: 0,
       totalBars: 0,
       totalTimeMinutes: 0,
+      totalPieces: 0,
       totalClients: 0,
       totalProcesses: 0
     },
+    pieceIds: [],
     clientProcessSummary: [],
     clientSummary: [],
     operatorSummary: []
@@ -403,6 +417,7 @@ function getReportDataFromSpreadsheet_(spreadsheet, options) {
     var classifiedCutType = classifyCutType(item.cutType);
     var quantity = item.quantity || 1;
     var totalLength = item.length * quantity;
+    reportData.pieceIdMap[normalizeText(item.pieceId)] = item.pieceId;
 
     reportData.indicators.totalCuts += quantity;
     reportData.indicators.totalLength += totalLength;
@@ -592,8 +607,13 @@ function getReportDataFromSpreadsheet_(spreadsheet, options) {
   reportData.indicators.totalTimeHours = minutesToHours(reportData.indicators.totalTimeMinutes);
   reportData.indicators.totalClients = reportData.clientSummary.length;
   reportData.indicators.totalProcesses = Object.keys(processNames).length;
+  reportData.pieceIds = Object.keys(reportData.pieceIdMap).sort().map(function(pieceKey) {
+    return reportData.pieceIdMap[pieceKey];
+  });
+  reportData.indicators.totalPieces = reportData.pieceIds.length;
   delete reportData.clientProcessUsage;
   delete reportData.operatorUsage;
+  delete reportData.pieceIdMap;
 
   return reportData;
 }
@@ -606,6 +626,7 @@ function buildExtractionDiagnosticMessage(diagnostic) {
   message.push("Linhas validas encontradas: " + diagnostic.validRows);
   message.push("Linhas ignoradas: " + diagnostic.ignoredRows);
   message.push("Linhas duplicadas ignoradas: " + diagnostic.duplicateRows);
+  message.push("Linhas sem ID PECA ignoradas: " + diagnostic.missingPieceIdRows);
 
   if (diagnostic.ignoredSheets.length) {
     message.push("Motivos: " + diagnostic.ignoredSheets.join(" | "));
