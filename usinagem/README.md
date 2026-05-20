@@ -35,6 +35,8 @@ Por: LUCAS em 03/11/2025 10:50:04
 
 O extrator usa a data/hora do `BIPADO` para calcular tempo total por cliente e processo, e separa o operador quando o texto tiver o padrao `Por: NOME em DATA HORA`.
 
+Nos relatorios, o comprimento e exibido em metros e o tempo total e exibido em horas.
+
 ## Configuracao recomendada
 
 Na planilha de usinagem, use o menu:
@@ -68,6 +70,8 @@ Cole/anexe estes arquivos no Apps Script da planilha de usinagem:
 Reports.gs
 api.gs
 main.gs
+LagunaBI.html
+PrintLayout.html
 ```
 
 Estes arquivos desta pasta sao dedicados para `USI PER`. Por padrao, eles nao leem abas `CRT PER`.

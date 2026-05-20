@@ -26,6 +26,8 @@ Campos principais:
 - `USINAGEM`: processo/operacao quando existir.
 - `BIPADO`: data e hora usada para tempo de corte.
 
+Nos relatorios, o comprimento e exibido em metros e o tempo total e exibido em horas.
+
 ## Configuracao recomendada
 
 Na planilha de corte, use o menu:

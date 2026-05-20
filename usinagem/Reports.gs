@@ -204,6 +204,14 @@ function getReportDataFromSpreadsheet_(spreadsheet, options) {
     return match ? match[1].trim() : "";
   }
 
+  function mmToMeters(value) {
+    return (Number(value || 0) / 1000).toFixed(2);
+  }
+
+  function minutesToHours(value) {
+    return (Number(value || 0) / 60).toFixed(2);
+  }
+
   function classifyCutType(value) {
     var normalized = normalizeText(value).replace(/ graus?/g, "");
     var numbers = normalized.match(/\d+/g);
@@ -398,7 +406,8 @@ function getReportDataFromSpreadsheet_(spreadsheet, options) {
       cuts2Retos: summary.cutTypes["2 cortes retos"],
       cuts1Reto1Angulo: summary.cutTypes["1 corte reto e 1 corte em angulo"],
       cuts2Angulos: summary.cutTypes["2 cortes em angulo"],
-      timeTaken: ((summary.lastCutTime - summary.firstCutTime) / (1000 * 60)).toFixed(2)
+      timeTaken: ((summary.lastCutTime - summary.firstCutTime) / (1000 * 60)).toFixed(2),
+      timeHours: minutesToHours((summary.lastCutTime - summary.firstCutTime) / (1000 * 60))
     });
   });
   reportData.dailySummary = formattedDailySummary;
@@ -409,6 +418,7 @@ function getReportDataFromSpreadsheet_(spreadsheet, options) {
     formattedProfileBarUsage.push({
       profile: profile,
       totalLength: usage.totalLength.toFixed(2),
+      totalLengthMeters: mmToMeters(usage.totalLength),
       totalBars: (usage.totalLength / 6000).toFixed(2)
     });
 
@@ -418,6 +428,7 @@ function getReportDataFromSpreadsheet_(spreadsheet, options) {
         profile: profile,
         date: dateKey,
         length: dailyLength.toFixed(2),
+        lengthMeters: mmToMeters(dailyLength),
         bars: (dailyLength / 6000).toFixed(2)
       });
     });
@@ -430,6 +441,7 @@ function getReportDataFromSpreadsheet_(spreadsheet, options) {
       operator: operatorName,
       totalCuts: usage.totalCuts,
       timeMinutes: ((usage.lastCutTime - usage.firstCutTime) / (1000 * 60)).toFixed(2),
+      timeHours: minutesToHours((usage.lastCutTime - usage.firstCutTime) / (1000 * 60)),
       firstCut: Utilities.formatDate(new Date(usage.firstCutTime), timezone, "yyyy-MM-dd HH:mm:ss"),
       lastCut: Utilities.formatDate(new Date(usage.lastCutTime), timezone, "yyyy-MM-dd HH:mm:ss")
     });
@@ -466,8 +478,10 @@ function getReportDataFromSpreadsheet_(spreadsheet, options) {
         cuts1Reto1Angulo: usage.cutTypes["1 corte reto e 1 corte em angulo"],
         cuts2Angulos: usage.cutTypes["2 cortes em angulo"],
         totalLength: usage.totalLength.toFixed(2),
+        totalLengthMeters: mmToMeters(usage.totalLength),
         totalBars: bars.toFixed(2),
         timeMinutes: timeMinutes.toFixed(2),
+        timeHours: minutesToHours(timeMinutes),
         firstCut: Utilities.formatDate(new Date(usage.firstCutTime), timezone, "yyyy-MM-dd HH:mm:ss"),
         lastCut: Utilities.formatDate(new Date(usage.lastCutTime), timezone, "yyyy-MM-dd HH:mm:ss")
       });
@@ -478,16 +492,21 @@ function getReportDataFromSpreadsheet_(spreadsheet, options) {
       processes: clientTotals.processes,
       totalCuts: clientTotals.totalCuts,
       totalLength: clientTotals.totalLength.toFixed(2),
+      totalLengthMeters: mmToMeters(clientTotals.totalLength),
       totalBars: clientTotals.totalBars.toFixed(2),
-      totalTimeMinutes: clientTotals.totalTimeMinutes.toFixed(2)
+      totalTimeMinutes: clientTotals.totalTimeMinutes.toFixed(2),
+      totalTimeHours: minutesToHours(clientTotals.totalTimeMinutes)
     });
   });
 
-  reportData.indicators.totalBars = (reportData.indicators.totalLength / 6000).toFixed(2);
-  reportData.indicators.totalLength = reportData.indicators.totalLength.toFixed(2);
+  var indicatorLength = reportData.indicators.totalLength;
+  reportData.indicators.totalBars = (indicatorLength / 6000).toFixed(2);
+  reportData.indicators.totalLength = indicatorLength.toFixed(2);
+  reportData.indicators.totalLengthMeters = mmToMeters(indicatorLength);
   reportData.indicators.totalTimeMinutes = reportData.clientSummary.reduce(function(total, item) {
     return total + parseFloat(item.totalTimeMinutes || 0);
   }, 0).toFixed(2);
+  reportData.indicators.totalTimeHours = minutesToHours(reportData.indicators.totalTimeMinutes);
   reportData.indicators.totalClients = reportData.clientSummary.length;
   reportData.indicators.totalProcesses = Object.keys(processNames).length;
   delete reportData.clientProcessUsage;

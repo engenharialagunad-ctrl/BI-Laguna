@@ -43,26 +43,26 @@ function analyzeCutsAndProfiles() {
 
   resultSheet.getRange(rowNum++, 1).setValue("Indicadores Gerais");
   resultSheet.getRange(rowNum++, 1, 1, 6).setValues([[
-    "Clientes", "Processos", "Total de Cortes", "Comprimento Total (mm)", "Total de Barras", "Tempo Total de Corte (min)"
+    "Clientes", "Processos", "Total de Cortes", "Comprimento Total (m)", "Total de Barras", "Tempo Total de Corte (h)"
   ]]);
   resultSheet.getRange(rowNum++, 1, 1, 6).setValues([[
     reportData.indicators.totalClients,
     reportData.indicators.totalProcesses,
     reportData.indicators.totalCuts,
-    reportData.indicators.totalLength,
+    reportData.indicators.totalLengthMeters,
     reportData.indicators.totalBars,
-    reportData.indicators.totalTimeMinutes
+    reportData.indicators.totalTimeHours
   ]]);
   rowNum++;
 
   resultSheet.getRange(rowNum++, 1).setValue("Resumo por Cliente");
   resultSheet.getRange(rowNum++, 1, 1, 6).setValues([[
-    "Cliente", "Processos", "Total de Cortes", "Comprimento Total (mm)", "Total de Barras", "Tempo Total de Corte (min)"
+    "Cliente", "Processos", "Total de Cortes", "Comprimento Total (m)", "Total de Barras", "Tempo Total de Corte (h)"
   ]]);
   reportData.clientSummary.forEach(function(summary) {
     resultSheet.getRange(rowNum++, 1, 1, 6).setValues([[
       summary.client, summary.processes, summary.totalCuts,
-      summary.totalLength, summary.totalBars, summary.totalTimeMinutes
+      summary.totalLengthMeters, summary.totalBars, summary.totalTimeHours
     ]]);
   });
   rowNum++;
@@ -70,13 +70,13 @@ function analyzeCutsAndProfiles() {
   resultSheet.getRange(rowNum++, 1).setValue("Tempo de Corte por Cliente e Processo");
   resultSheet.getRange(rowNum++, 1, 1, 11).setValues([[
     "Cliente", "Processo", "Total de Cortes", "2 Retos", "1 Reto e 1 Angulo", "2 Angulos",
-    "Comprimento Total (mm)", "Total de Barras", "Tempo Total (min)", "Primeiro BIPADO", "Ultimo BIPADO"
+    "Comprimento Total (m)", "Total de Barras", "Tempo Total (h)", "Primeiro BIPADO", "Ultimo BIPADO"
   ]]);
   reportData.clientProcessSummary.forEach(function(summary) {
     resultSheet.getRange(rowNum++, 1, 1, 11).setValues([[
       summary.client, summary.process, summary.totalCuts, summary.cuts2Retos,
-      summary.cuts1Reto1Angulo, summary.cuts2Angulos, summary.totalLength,
-      summary.totalBars, summary.timeMinutes, summary.firstCut, summary.lastCut
+      summary.cuts1Reto1Angulo, summary.cuts2Angulos, summary.totalLengthMeters,
+      summary.totalBars, summary.timeHours, summary.firstCut, summary.lastCut
     ]]);
   });
   rowNum++;
@@ -90,34 +90,34 @@ function analyzeCutsAndProfiles() {
 
   resultSheet.getRange(rowNum++, 1).setValue("Resumo Diario de Cortes");
   resultSheet.getRange(rowNum++, 1, 1, 6).setValues([[
-    "Data", "Total de Cortes", "2 Retos", "1 Reto e 1 Angulo", "2 Angulos", "Tempo Total (min)"
+    "Data", "Total de Cortes", "2 Retos", "1 Reto e 1 Angulo", "2 Angulos", "Tempo Total (h)"
   ]]);
   reportData.dailySummary.forEach(function(summary) {
     resultSheet.getRange(rowNum++, 1, 1, 6).setValues([[
       summary.date, summary.totalCuts, summary.cuts2Retos,
-      summary.cuts1Reto1Angulo, summary.cuts2Angulos, summary.timeTaken
+      summary.cuts1Reto1Angulo, summary.cuts2Angulos, summary.timeHours
     ]]);
   });
   rowNum++;
 
   resultSheet.getRange(rowNum++, 1).setValue("Uso de Barras por Perfil (Barra = 6000mm)");
   resultSheet.getRange(rowNum++, 1, 1, 3).setValues([[
-    "Perfil", "Comprimento Total (mm)", "Total de Barras"
+    "Perfil", "Comprimento Total (m)", "Total de Barras"
   ]]);
   reportData.profileBarUsage.forEach(function(usage) {
     resultSheet.getRange(rowNum++, 1, 1, 3).setValues([[
-      usage.profile, usage.totalLength, usage.totalBars
+      usage.profile, usage.totalLengthMeters, usage.totalBars
     ]]);
   });
   rowNum++;
 
   resultSheet.getRange(rowNum++, 1).setValue("Detalhe Diario de Uso de Barras por Perfil");
   resultSheet.getRange(rowNum++, 1, 1, 4).setValues([[
-    "Perfil", "Data", "Comprimento Usinado (mm)", "Barras Usinadas"
+    "Perfil", "Data", "Comprimento Usinado (m)", "Barras Usinadas"
   ]]);
   reportData.dailyProfileUsage.forEach(function(detail) {
     resultSheet.getRange(rowNum++, 1, 1, 4).setValues([[
-      detail.profile, detail.date, detail.length, detail.bars
+      detail.profile, detail.date, detail.lengthMeters, detail.bars
     ]]);
   });
 

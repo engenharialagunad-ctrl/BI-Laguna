@@ -106,9 +106,9 @@ function buildLagunaChartData_(reportData) {
       { label: "Clientes", value: Number(indicators.totalClients || 0) },
       { label: "Processos", value: Number(indicators.totalProcesses || 0) },
       { label: "Cortes", value: Number(indicators.totalCuts || 0) },
-      { label: "Comprimento Total (mm)", value: Number(indicators.totalLength || 0) },
+      { label: "Comprimento Total (m)", value: Number(indicators.totalLengthMeters || 0) },
       { label: "Barras", value: Number(indicators.totalBars || 0) },
-      { label: "Tempo Total (min)", value: Number(indicators.totalTimeMinutes || 0) }
+      { label: "Tempo Total (h)", value: Number(indicators.totalTimeHours || 0) }
     ],
     cutDistribution: Object.keys(reportData.cutTypeCounts || {}).map(function(type) {
       return { label: type, value: Number(reportData.cutTypeCounts[type] || 0) };
@@ -116,7 +116,7 @@ function buildLagunaChartData_(reportData) {
     clientTime: (reportData.clientSummary || []).map(function(item) {
       return {
         label: item.client,
-        value: Number(item.totalTimeMinutes || 0),
+        value: Number(item.totalTimeHours || 0),
         cuts: Number(item.totalCuts || 0),
         bars: Number(item.totalBars || 0)
       };
@@ -126,7 +126,7 @@ function buildLagunaChartData_(reportData) {
         label: item.client + " | " + item.process,
         client: item.client,
         process: item.process,
-        value: Number(item.timeMinutes || 0),
+        value: Number(item.timeHours || 0),
         cuts: Number(item.totalCuts || 0),
         bars: Number(item.totalBars || 0)
       };
@@ -135,20 +135,20 @@ function buildLagunaChartData_(reportData) {
       return {
         label: item.profile,
         value: Number(item.totalBars || 0),
-        length: Number(item.totalLength || 0)
+        length: Number(item.totalLengthMeters || 0)
       };
     }),
     dailyCuts: (reportData.dailySummary || []).map(function(item) {
       return {
         label: item.date,
         value: Number(item.totalCuts || 0),
-        timeMinutes: Number(item.timeTaken || 0)
+        timeHours: Number(item.timeHours || 0)
       };
     }),
     operatorTime: (reportData.operatorSummary || []).map(function(item) {
       return {
         label: item.operator,
-        value: Number(item.timeMinutes || 0),
+        value: Number(item.timeHours || 0),
         cuts: Number(item.totalCuts || 0)
       };
     })

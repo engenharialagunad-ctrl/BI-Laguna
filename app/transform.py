@@ -35,6 +35,14 @@ def chart_item(label: str, value: Any, **extra: Any) -> Dict[str, Any]:
     return item
 
 
+def mm_to_meters(value: Any) -> float:
+    return round(to_number(value) / 1000, 2)
+
+
+def minutes_to_hours(value: Any) -> float:
+    return round(to_number(value) / 60, 2)
+
+
 def slugify(value: Any) -> str:
     text = str(value or "origem").strip().lower()
     text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
@@ -94,9 +102,9 @@ def build_charts(data: Dict[str, Any]) -> Dict[str, List[Dict[str, Any]]]:
             chart_item("Clientes", indicators.get("totalClients")),
             chart_item("Processos", indicators.get("totalProcesses")),
             chart_item("Cortes", indicators.get("totalCuts")),
-            chart_item("Comprimento Total (mm)", indicators.get("totalLength")),
+            chart_item("Comprimento Total (m)", indicators.get("totalLengthMeters") or mm_to_meters(indicators.get("totalLength"))),
             chart_item("Barras", indicators.get("totalBars")),
-            chart_item("Tempo Total (min)", indicators.get("totalTimeMinutes")),
+            chart_item("Tempo Total (h)", indicators.get("totalTimeHours") or minutes_to_hours(indicators.get("totalTimeMinutes"))),
         ],
         "cutDistribution": [
             chart_item(label, value) for label, value in cut_counts.items()
@@ -104,7 +112,7 @@ def build_charts(data: Dict[str, Any]) -> Dict[str, List[Dict[str, Any]]]:
         "clientTime": [
             chart_item(
                 item.get("clientLabel") or item.get("client", "-"),
-                item.get("totalTimeMinutes"),
+                item.get("totalTimeHours") or minutes_to_hours(item.get("totalTimeMinutes")),
                 cuts=to_number(item.get("totalCuts")),
                 bars=to_number(item.get("totalBars")),
                 sourceCategory=item.get("sourceCategory", "-"),
@@ -115,7 +123,7 @@ def build_charts(data: Dict[str, Any]) -> Dict[str, List[Dict[str, Any]]]:
         "processTime": [
             chart_item(
                 item.get("processLabel") or f"{item.get('client', '-')} | {item.get('process', '-')}",
-                item.get("timeMinutes"),
+                item.get("timeHours") or minutes_to_hours(item.get("timeMinutes")),
                 client=item.get("client", "-"),
                 process=item.get("process", "-"),
                 sourceCategory=item.get("sourceCategory", "-"),
@@ -129,7 +137,7 @@ def build_charts(data: Dict[str, Any]) -> Dict[str, List[Dict[str, Any]]]:
             chart_item(
                 item.get("profile", "-"),
                 item.get("totalBars"),
-                length=to_number(item.get("totalLength")),
+                length=to_number(item.get("totalLengthMeters") or mm_to_meters(item.get("totalLength"))),
             )
             for item in data.get("profileBarUsage", []) or []
         ],
@@ -137,14 +145,14 @@ def build_charts(data: Dict[str, Any]) -> Dict[str, List[Dict[str, Any]]]:
             chart_item(
                 item.get("date", "-"),
                 item.get("totalCuts"),
-                timeMinutes=to_number(item.get("timeTaken")),
+                timeHours=to_number(item.get("timeHours") or minutes_to_hours(item.get("timeTaken"))),
             )
             for item in data.get("dailySummary", []) or []
         ],
         "operatorTime": [
             chart_item(
                 item.get("operator", "-"),
-                item.get("timeMinutes"),
+                item.get("timeHours") or minutes_to_hours(item.get("timeMinutes")),
                 cuts=to_number(item.get("totalCuts")),
             )
             for item in data.get("operatorSummary", []) or []
@@ -195,8 +203,10 @@ def aggregate_payloads(payloads: List[Dict[str, Any]]) -> Dict[str, Any]:
         "indicators": {
             "totalCuts": 0,
             "totalLength": 0,
+            "totalLengthMeters": 0,
             "totalBars": 0,
             "totalTimeMinutes": 0,
+            "totalTimeHours": 0,
             "totalClients": 0,
             "totalProcesses": 0,
             "totalSources": 0,
@@ -225,35 +235,56 @@ def aggregate_payloads(payloads: List[Dict[str, Any]]) -> Dict[str, Any]:
         categories.add(source.get("category", "Geral"))
         combined_data["indicators"]["totalCuts"] += to_number(indicators.get("totalCuts"))
         combined_data["indicators"]["totalLength"] += to_number(indicators.get("totalLength"))
+        combined_data["indicators"]["totalLengthMeters"] += to_number(
+            indicators.get("totalLengthMeters") or mm_to_meters(indicators.get("totalLength"))
+        )
         combined_data["indicators"]["totalBars"] += to_number(indicators.get("totalBars"))
         combined_data["indicators"]["totalTimeMinutes"] += to_number(indicators.get("totalTimeMinutes"))
+        combined_data["indicators"]["totalTimeHours"] += to_number(
+            indicators.get("totalTimeHours") or minutes_to_hours(indicators.get("totalTimeMinutes"))
+        )
 
         for cut_type, value in (data.get("cutTypeCounts") or {}).items():
             combined_data["cutTypeCounts"][cut_type] = combined_data["cutTypeCounts"].get(cut_type, 0) + to_number(value)
 
         for row in data.get("clientSummary", []) or []:
             enriched = with_source(row, source)
+            enriched.setdefault("totalLengthMeters", mm_to_meters(enriched.get("totalLength")))
+            enriched.setdefault("totalTimeHours", minutes_to_hours(enriched.get("totalTimeMinutes")))
             enriched["clientLabel"] = f"{source.get('category', 'Geral')} | {row.get('client', '-')}"
             clients.add((source.get("category", "Geral"), row.get("client", "-")))
             combined_data["clientSummary"].append(enriched)
 
         for row in data.get("clientProcessSummary", []) or []:
             enriched = with_source(row, source)
+            enriched.setdefault("totalLengthMeters", mm_to_meters(enriched.get("totalLength")))
+            enriched.setdefault("timeHours", minutes_to_hours(enriched.get("timeMinutes")))
             enriched["processLabel"] = f"{source.get('category', 'Geral')} | {row.get('client', '-')} | {row.get('process', '-')}"
             processes.add((source.get("category", "Geral"), row.get("process", "-")))
             combined_data["clientProcessSummary"].append(enriched)
 
         for key in ["dailySummary", "profileBarUsage", "dailyProfileUsage", "operatorSummary"]:
             for row in data.get(key, []) or []:
-                combined_data[key].append(with_source(row, source))
+                enriched = with_source(row, source)
+                if key == "dailySummary":
+                    enriched.setdefault("timeHours", minutes_to_hours(enriched.get("timeTaken")))
+                elif key == "profileBarUsage":
+                    enriched.setdefault("totalLengthMeters", mm_to_meters(enriched.get("totalLength")))
+                elif key == "dailyProfileUsage":
+                    enriched.setdefault("lengthMeters", mm_to_meters(enriched.get("length")))
+                elif key == "operatorSummary":
+                    enriched.setdefault("timeHours", minutes_to_hours(enriched.get("timeMinutes")))
+                combined_data[key].append(enriched)
 
     combined_data["indicators"]["totalClients"] = len(clients)
     combined_data["indicators"]["totalProcesses"] = len(processes)
     combined_data["indicators"]["totalSources"] = len(sources)
     combined_data["indicators"]["totalCategories"] = len(categories)
     combined_data["indicators"]["totalLength"] = round(combined_data["indicators"]["totalLength"], 2)
+    combined_data["indicators"]["totalLengthMeters"] = round(combined_data["indicators"]["totalLengthMeters"], 2)
     combined_data["indicators"]["totalBars"] = round(combined_data["indicators"]["totalBars"], 2)
     combined_data["indicators"]["totalTimeMinutes"] = round(combined_data["indicators"]["totalTimeMinutes"], 2)
+    combined_data["indicators"]["totalTimeHours"] = round(combined_data["indicators"]["totalTimeHours"], 2)
 
     generated_at = max((payload.get("generatedAt") or payload.get("receivedAt") or "") for payload in payloads)
     return {

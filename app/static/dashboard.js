@@ -161,16 +161,16 @@ function render(payload) {
       ${renderFilters(payload)}
       ${renderKpis(charts)}
       <section class="grid">
-        ${renderBars("Tempo por cliente e processo", charts.processTime)}
+        ${renderBars("Tempo por cliente e processo (h)", charts.processTime)}
         ${renderDonut("Tipos de corte", charts.cutDistribution)}
       </section>
       <section class="grid">
-        ${renderBars("Tempo por cliente", charts.clientTime, 10)}
+        ${renderBars("Tempo por cliente (h)", charts.clientTime, 10)}
         ${renderBars("Barras por perfil", charts.profileBars, 10)}
       </section>
       <section class="grid">
-        ${renderTable("Resumo por cliente", ["Cliente", "Processos", "Cortes", "Barras", "Tempo"], data.clientSummary, ["client", "processes", "totalCuts", "totalBars", "totalTimeMinutes"])}
-        ${renderTable("Processos", ["Cliente", "Processo", "Cortes", "Comprimento", "Barras", "Tempo"], data.clientProcessSummary, ["client", "process", "totalCuts", "totalLength", "totalBars", "timeMinutes"])}
+        ${renderTable("Resumo por cliente", ["Cliente", "Processos", "Cortes", "Barras", "Tempo (h)"], data.clientSummary, ["client", "processes", "totalCuts", "totalBars", "totalTimeHours"])}
+        ${renderTable("Processos", ["Cliente", "Processo", "Cortes", "Comprimento (m)", "Barras", "Tempo (h)"], data.clientProcessSummary, ["client", "process", "totalCuts", "totalLengthMeters", "totalBars", "timeHours"])}
       </section>
     </section>
   `;
