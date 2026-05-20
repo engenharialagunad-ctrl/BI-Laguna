@@ -635,7 +635,7 @@ function sendLagunaBiDataFromMenu() {
   SpreadsheetApp.getUi().alert(
     result.ok ? "Envio concluido" : "Envio nao concluido",
     result.ok
-      ? "Dados enviados para a API externa com sucesso."
+      ? buildLagunaApiResponseMessage_(result)
       : (result.message || ("Status: " + result.statusCode + "\n" + result.responseText)),
     SpreadsheetApp.getUi().ButtonSet.OK
   );
@@ -646,10 +646,47 @@ function sendLagunaPendingSourcesToExternalApiFromMenu() {
   SpreadsheetApp.getUi().alert(
     result.ok ? "Envio em lote concluido" : "Envio em lote nao concluido",
     result.ok
-      ? "Origens enviadas: " + result.extracted + "\nStatus: " + result.statusCode + "\n\n" + result.responseText
+      ? "Origens enviadas: " + result.extracted + "\nStatus: " + result.statusCode + "\n\n" + buildLagunaApiResponseMessage_(result)
       : (result.message || ("Status: " + result.statusCode + "\n" + result.responseText)),
     SpreadsheetApp.getUi().ButtonSet.OK
   );
+}
+
+function buildLagunaApiResponseMessage_(result) {
+  var message = ["Dados enviados para a API externa com sucesso."];
+  if (!result.responseText) return message.join("\n");
+
+  try {
+    var response = JSON.parse(result.responseText);
+    if (response.validation) {
+      message.push(formatLagunaValidation_(response.validation));
+    }
+    if (response.validations && response.validations.length) {
+      response.validations.slice(0, 8).forEach(function(item) {
+        var source = item.source || {};
+        message.push((source.name || source.key || "Origem") + ":\n" + formatLagunaValidation_(item.validation));
+      });
+      if (response.validations.length > 8) {
+        message.push("Outras origens: " + (response.validations.length - 8));
+      }
+    }
+  } catch (error) {
+    message.push(result.responseText);
+  }
+
+  return message.join("\n\n");
+}
+
+function formatLagunaValidation_(validation) {
+  if (!validation) return "Validacao indisponivel.";
+  var delta = validation.delta || {};
+  return [
+    "Leitura anterior: " + (validation.hasPreviousRead ? "sim" : "nao"),
+    "Leitura repetida: " + (validation.isRepeatRead ? "sim" : "nao"),
+    "Novos cortes: " + (delta.cuts || 0),
+    "Novos metros: " + (delta.lengthMeters || 0),
+    "Novas horas: " + (delta.timeHours || 0)
+  ].join("\n");
 }
 
 function getApiRoute_(e) {
