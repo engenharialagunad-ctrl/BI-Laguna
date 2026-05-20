@@ -2,6 +2,10 @@ var LAGUNA_API_URL_PROPERTY = "LAGUNA_API_URL";
 var LAGUNA_API_TOKEN_PROPERTY = "LAGUNA_API_TOKEN";
 var LAGUNA_SOURCE_CATEGORY_PROPERTY = "LAGUNA_SOURCE_CATEGORY";
 var LAGUNA_SOURCE_NAME_PROPERTY = "LAGUNA_SOURCE_NAME";
+var LAGUNA_BI_API_INGEST_URL = "https://bi-lagunaportas.vercel.app/api/ingest";
+var LAGUNA_DEFAULT_SOURCE_CATEGORY = "Usinagem";
+var LAGUNA_DEFAULT_SOURCE_NAME = "Usinagem";
+var LAGUNA_DEFAULT_SHEET_PATTERN = "USI PER";
 var LAGUNA_PENDING_SOURCES_SHEET = "LagunaBI_Origens_Pendentes";
 var LAGUNA_PENDING_SOURCES_HEADERS = [
   "Ativo",
@@ -48,13 +52,13 @@ function doPost(e) {
 function getLagunaBiPayload_() {
   var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
   var properties = PropertiesService.getScriptProperties();
-  var sourceCategory = properties.getProperty(LAGUNA_SOURCE_CATEGORY_PROPERTY) || detectLagunaDefaultCategory_(spreadsheet);
-  var sourceName = properties.getProperty(LAGUNA_SOURCE_NAME_PROPERTY) || spreadsheet.getName();
+  var sourceCategory = properties.getProperty(LAGUNA_SOURCE_CATEGORY_PROPERTY) || getLagunaDefaultCategory_();
+  var sourceName = properties.getProperty(LAGUNA_SOURCE_NAME_PROPERTY) || getLagunaDefaultSourceName_(spreadsheet);
   return getLagunaBiPayloadFromSpreadsheet_(spreadsheet, sourceName, sourceCategory);
 }
 
 function getLagunaBiPayloadFromSpreadsheet_(spreadsheet, sourceName, sourceCategory) {
-  sourceCategory = sourceCategory || detectLagunaDefaultCategory_(spreadsheet);
+  sourceCategory = sourceCategory || getLagunaDefaultCategory_();
   var reportData = getReportDataFromSpreadsheet_(spreadsheet, { category: sourceCategory });
   if (!reportData) {
     return {
@@ -66,7 +70,7 @@ function getLagunaBiPayloadFromSpreadsheet_(spreadsheet, sourceName, sourceCateg
     };
   }
 
-  sourceName = sourceName || spreadsheet.getName();
+  sourceName = sourceName || getLagunaDefaultSourceName_(spreadsheet);
   var payload = {
     ok: true,
     app: "BI Laguna",
@@ -192,9 +196,21 @@ function getLagunaWebAppCoordinates_() {
   };
 }
 
+function getLagunaDefaultApiUrl_() {
+  return LAGUNA_BI_API_INGEST_URL;
+}
+
+function getLagunaDefaultCategory_() {
+  return LAGUNA_DEFAULT_SOURCE_CATEGORY;
+}
+
+function getLagunaDefaultSourceName_(spreadsheet) {
+  return LAGUNA_DEFAULT_SOURCE_NAME || spreadsheet.getName();
+}
+
 function configureLagunaExternalApi(apiUrl, apiToken) {
   var properties = PropertiesService.getScriptProperties();
-  properties.setProperty(LAGUNA_API_URL_PROPERTY, apiUrl || "");
+  properties.setProperty(LAGUNA_API_URL_PROPERTY, apiUrl || getLagunaDefaultApiUrl_());
   properties.setProperty(LAGUNA_API_TOKEN_PROPERTY, apiToken || "");
 }
 
@@ -202,8 +218,8 @@ function configureLagunaSourceFromMenu() {
   var ui = SpreadsheetApp.getUi();
   var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
   var properties = PropertiesService.getScriptProperties();
-  var currentCategory = properties.getProperty(LAGUNA_SOURCE_CATEGORY_PROPERTY) || detectLagunaDefaultCategory_(spreadsheet);
-  var currentName = properties.getProperty(LAGUNA_SOURCE_NAME_PROPERTY) || spreadsheet.getName();
+  var currentCategory = properties.getProperty(LAGUNA_SOURCE_CATEGORY_PROPERTY) || getLagunaDefaultCategory_();
+  var currentName = properties.getProperty(LAGUNA_SOURCE_NAME_PROPERTY) || getLagunaDefaultSourceName_(spreadsheet);
 
   var categoryResponse = ui.prompt(
     "Configurar Categoria",
@@ -238,8 +254,8 @@ function addActiveSpreadsheetToLagunaPendingSourcesFromMenu() {
   var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
   var properties = PropertiesService.getScriptProperties();
   var sheet = getLagunaPendingSourcesSheet_();
-  var sourceName = properties.getProperty(LAGUNA_SOURCE_NAME_PROPERTY) || spreadsheet.getName();
-  var sourceCategory = properties.getProperty(LAGUNA_SOURCE_CATEGORY_PROPERTY) || detectLagunaDefaultCategory_(spreadsheet);
+  var sourceName = properties.getProperty(LAGUNA_SOURCE_NAME_PROPERTY) || getLagunaDefaultSourceName_(spreadsheet);
+  var sourceCategory = properties.getProperty(LAGUNA_SOURCE_CATEGORY_PROPERTY) || getLagunaDefaultCategory_();
   var values = sheet.getDataRange().getDisplayValues();
   var foundRow = -1;
 
@@ -325,7 +341,7 @@ function getLagunaPendingSources_() {
       rowIndex: rowIndex + 1,
       spreadsheetId: extractSpreadsheetId_(urlOrId),
       sourceName: String(row[2] || "").trim(),
-      category: String(row[3] || "Usinagem").trim() || "Usinagem"
+      category: String(row[3] || getLagunaDefaultCategory_()).trim() || getLagunaDefaultCategory_()
     });
   }
 
@@ -357,7 +373,7 @@ function extractLagunaPendingSources_() {
       var payload = getLagunaBiPayloadFromSpreadsheet_(
         spreadsheet,
         source.sourceName || spreadsheet.getName(),
-        source.category || "Usinagem"
+        source.category || getLagunaDefaultCategory_()
       );
       var data = payload.data || {};
       var indicators = data.indicators || {};
@@ -428,6 +444,8 @@ function normalizeLagunaText_(value) {
 }
 
 function detectLagunaDefaultCategory_(spreadsheet) {
+  if (LAGUNA_DEFAULT_SOURCE_CATEGORY) return LAGUNA_DEFAULT_SOURCE_CATEGORY;
+
   var hasUsinagem = false;
   var hasCortes = false;
   spreadsheet.getSheets().forEach(function(sheet) {
@@ -445,13 +463,13 @@ function configureLagunaExternalApiFromMenu() {
   var ui = SpreadsheetApp.getUi();
   var urlResponse = ui.prompt(
     "Configurar API Externa",
-    "Informe a URL completa que recebera os dados do BI Laguna via POST JSON:",
+    "Informe a URL completa que recebera os dados do BI Laguna via POST JSON.\nPadrao: " + getLagunaDefaultApiUrl_(),
     ui.ButtonSet.OK_CANCEL
   );
 
   if (urlResponse.getSelectedButton() !== ui.Button.OK) return;
 
-  var apiUrl = urlResponse.getResponseText().trim();
+  var apiUrl = urlResponse.getResponseText().trim() || getLagunaDefaultApiUrl_();
   if (!apiUrl) {
     ui.alert("URL invalida", "A URL da API externa nao pode ficar vazia.", ui.ButtonSet.OK);
     return;
@@ -471,7 +489,7 @@ function configureLagunaExternalApiFromMenu() {
 
 function sendLagunaBiDataToExternalApi() {
   var properties = PropertiesService.getScriptProperties();
-  var apiUrl = properties.getProperty(LAGUNA_API_URL_PROPERTY);
+  var apiUrl = properties.getProperty(LAGUNA_API_URL_PROPERTY) || getLagunaDefaultApiUrl_();
   var apiToken = properties.getProperty(LAGUNA_API_TOKEN_PROPERTY);
 
   if (!apiUrl) {
@@ -507,7 +525,7 @@ function sendLagunaBiDataToExternalApi() {
 
 function sendLagunaPendingSourcesToExternalApi() {
   var properties = PropertiesService.getScriptProperties();
-  var apiUrl = properties.getProperty(LAGUNA_API_URL_PROPERTY);
+  var apiUrl = properties.getProperty(LAGUNA_API_URL_PROPERTY) || getLagunaDefaultApiUrl_();
   var apiToken = properties.getProperty(LAGUNA_API_TOKEN_PROPERTY);
 
   if (!apiUrl) {
@@ -575,7 +593,7 @@ function testLagunaExternalApiFromMenu() {
 
 function testLagunaExternalApi_() {
   var properties = PropertiesService.getScriptProperties();
-  var apiUrl = properties.getProperty(LAGUNA_API_URL_PROPERTY);
+  var apiUrl = properties.getProperty(LAGUNA_API_URL_PROPERTY) || getLagunaDefaultApiUrl_();
   var apiToken = properties.getProperty(LAGUNA_API_TOKEN_PROPERTY);
 
   if (!apiUrl) {
@@ -585,7 +603,9 @@ function testLagunaExternalApi_() {
     };
   }
 
-  var healthUrl = apiUrl.replace(/\/api\/ingest\/?$/, "/api/health");
+  var healthUrl = apiUrl
+    .replace(/\/api\/ingest-batch\/?$/i, "/api/health")
+    .replace(/\/api\/ingest\/?$/i, "/api/health");
   var headers = {};
   if (apiToken) {
     headers.Authorization = "Bearer " + apiToken;

@@ -1,7 +1,7 @@
 function onOpen() {
   var ui = SpreadsheetApp.getUi();
-  ui.createMenu("Analise de Cortes")
-      .addItem("Processar Dados (para Planilha)", "analyzeCutsAndProfiles")
+  ui.createMenu("BI Laguna - Perfis Corte")
+      .addItem("Processar Perfis Corte (para Planilha)", "analyzeCutsAndProfiles")
       .addItem("Gerar Relatorio (HTML)", "showReportSidebar")
       .addSeparator()
       .addItem("Abrir BI Laguna", "showLagunaBiDashboard")
@@ -136,7 +136,7 @@ function analyzeCutsAndProfiles() {
     .setBorder(true, true, true, true, true, true, "#d8dee5", SpreadsheetApp.BorderStyle.SOLID);
   resultSheet.autoResizeColumns(1, resultSheet.getLastColumn());
   SpreadsheetApp.getUi().alert(
-    "Analise Concluida!",
+    "Analise de Perfis Corte Concluida!",
     "Os resultados consolidados foram gerados na aba \"" + resultSheetName + "\".",
     SpreadsheetApp.getUi().ButtonSet.OK
   );

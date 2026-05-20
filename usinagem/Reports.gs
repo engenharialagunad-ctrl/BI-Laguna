@@ -1,5 +1,22 @@
 var LAST_EXTRACTION_DIAGNOSTIC = "";
 
+function getLagunaReportDefaultCategory_(spreadsheet) {
+  if (typeof LAGUNA_DEFAULT_SOURCE_CATEGORY !== "undefined" && LAGUNA_DEFAULT_SOURCE_CATEGORY) {
+    return LAGUNA_DEFAULT_SOURCE_CATEGORY;
+  }
+  if (typeof detectLagunaDefaultCategory_ === "function") {
+    return detectLagunaDefaultCategory_(spreadsheet);
+  }
+  return "Usinagem";
+}
+
+function getLagunaReportDefaultSheetPattern_() {
+  if (typeof LAGUNA_DEFAULT_SHEET_PATTERN !== "undefined" && LAGUNA_DEFAULT_SHEET_PATTERN) {
+    return LAGUNA_DEFAULT_SHEET_PATTERN;
+  }
+  return "USI PER";
+}
+
 function getReportData(options) {
   var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
   var configuredCategory = "";
@@ -8,9 +25,7 @@ function getReportData(options) {
   } catch (error) {
     configuredCategory = "";
   }
-  var defaultCategory = typeof detectLagunaDefaultCategory_ === "function"
-    ? detectLagunaDefaultCategory_(spreadsheet)
-    : "Usinagem";
+  var defaultCategory = getLagunaReportDefaultCategory_(spreadsheet);
   return getReportDataFromSpreadsheet_(spreadsheet, options || { category: configuredCategory || defaultCategory });
 }
 
@@ -48,7 +63,7 @@ function getReportDataFromSpreadsheet_(spreadsheet, options) {
     var normalizedName = normalizeText(sheetName);
     var isCrtPer = normalizedName.indexOf("crt per") !== -1;
     var isUsiPer = normalizedName.indexOf("usi per") !== -1;
-    var mode = normalizeText(options.sheetMode || options.category || "");
+    var mode = normalizeText(options.sheetMode || options.category || getLagunaReportDefaultSheetPattern_());
 
     if (mode.indexOf("usinagem") !== -1 || mode.indexOf("usi") !== -1) return isUsiPer;
     if (mode.indexOf("corte") !== -1 || mode.indexOf("crt") !== -1) return isCrtPer;
@@ -57,7 +72,7 @@ function getReportDataFromSpreadsheet_(spreadsheet, options) {
   }
 
   function getSheetPatternLabel() {
-    var mode = normalizeText(options.sheetMode || options.category || "");
+    var mode = normalizeText(options.sheetMode || options.category || getLagunaReportDefaultSheetPattern_());
     if (mode.indexOf("usinagem") !== -1 || mode.indexOf("usi") !== -1) return "USI PER";
     if (mode.indexOf("corte") !== -1 || mode.indexOf("crt") !== -1) return "CRT PER";
     return "USI PER";

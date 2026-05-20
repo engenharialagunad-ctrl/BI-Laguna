@@ -56,6 +56,8 @@ API externa:
 https://bi-lagunaportas.vercel.app/api/ingest
 ```
 
+Essa URL ja fica como padrao nos arquivos `.gs` desta pasta. O envio individual e o envio em lote usam o mesmo contrato JSON do app BI Laguna.
+
 Para envio em lote, cadastre esta planilha na aba `LagunaBI_Origens_Pendentes` com categoria `Usinagem`.
 
 ## Arquivos `.gs`

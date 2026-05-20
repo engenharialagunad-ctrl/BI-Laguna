@@ -31,7 +31,7 @@ Campos principais:
 Na planilha de corte, use o menu:
 
 ```text
-Analise de Cortes > Configurar Origem/Categoria
+BI Laguna - Perfis Corte > Configurar Origem/Categoria
 ```
 
 Preencha:
@@ -46,5 +46,7 @@ API externa:
 ```text
 https://bi-lagunaportas.vercel.app/api/ingest
 ```
+
+Essa URL ja fica como padrao nos arquivos `.gs` desta pasta. O envio individual e o envio em lote usam o mesmo contrato JSON do app BI Laguna.
 
 Para planilhas em lote, cadastre esta origem na aba `LagunaBI_Origens_Pendentes` com categoria `Cortes`.
