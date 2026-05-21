@@ -14,7 +14,7 @@ Use esta pasta para os arquivos do Apps Script ligados a planilha que trabalha c
 Colunas usadas:
 
 ```text
-CORTE | PERFIL 2 | COMP | QTD | CLIENTE | USINAGEM | BIPADO
+CORTE | PERFIL 2 | COMP | QTD | CLIENTE | USINAGEM | ID PECA | BIPADO
 ```
 
 Campos principais:
@@ -25,9 +25,11 @@ Campos principais:
 - `QTD`: quantidade.
 - `CLIENTE`: cliente para agrupamento no BI.
 - `USINAGEM`: processo/operacao quando existir.
+- `ID PECA`: identificador unico da peca, usado para validar duplicidade.
 - `BIPADO`: data e hora usada para tempo de corte.
 
 Nos relatorios, o comprimento e exibido em metros e o tempo total e exibido em horas.
+O tempo e calculado somente dentro dos turnos do mesmo dia: manha `08:00-12:00` e tarde `13:00-17:48`. O intervalo de almoco e viradas de dia nao entram na soma.
 
 ## Configuracao recomendada
 

@@ -25,7 +25,10 @@ Campos principais usados pelo BI:
 - `QTD`: quantidade.
 - `USINAGEM`: processo, exemplo `Dobradica Sobrepor RAJ`.
 - `CLIENTE`: cliente.
+- `ID PECA`: identificador unico da peca, usado para validar duplicidade.
 - `BIPADO`: operador e data/hora, exemplo `Por: LUCAS em 03/11/2025 10:50:04`.
+
+O tempo e calculado somente dentro dos turnos do mesmo dia: manha `08:00-12:00` e tarde `13:00-17:48`. O intervalo de almoco e viradas de dia nao entram na soma.
 
 ## Planilhas pendentes
 

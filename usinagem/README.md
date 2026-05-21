@@ -26,6 +26,7 @@ Campos usados pelo BI:
 - `USINAGEM`: processo, exemplo `Dobradica Sobrepor RAJ`.
 - `CLIENTE`: cliente.
 - `AMBIENTE`: ambiente da peca.
+- `ID PECA`: identificador unico da peca, usado para validar duplicidade.
 - `BIPADO`: operador, data e hora.
 
 Exemplo de `BIPADO` reconhecido:
@@ -35,6 +36,7 @@ Por: LUCAS em 03/11/2025 10:50:04
 ```
 
 O extrator usa a data/hora do `BIPADO` para calcular tempo total por cliente e processo, e separa o operador quando o texto tiver o padrao `Por: NOME em DATA HORA`.
+O tempo e calculado somente dentro dos turnos do mesmo dia: manha `08:00-12:00` e tarde `13:00-17:48`. O intervalo de almoco e viradas de dia nao entram na soma.
 
 Nos relatorios, o comprimento e exibido em metros e o tempo total e exibido em horas.
 

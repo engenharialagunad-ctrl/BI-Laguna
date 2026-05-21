@@ -232,23 +232,34 @@ function getReportDataFromSpreadsheet_(spreadsheet, options) {
     return (Number(value || 0) / 60).toFixed(2);
   }
 
-  function updateDailyWindow(usage, dateKey, timestamp) {
-    if (!usage.dailyWindows) usage.dailyWindows = {};
-    if (!usage.dailyWindows[dateKey]) {
-      usage.dailyWindows[dateKey] = {
+  function getProductionShiftKey(dateKey, dateTime) {
+    var seconds = dateTime.getHours() * 3600 + dateTime.getMinutes() * 60 + dateTime.getSeconds();
+    if (seconds >= 8 * 3600 && seconds <= 12 * 3600) return dateKey + "|manha";
+    if (seconds >= 13 * 3600 && seconds <= (17 * 3600 + 48 * 60)) return dateKey + "|tarde";
+    return "";
+  }
+
+  function updateShiftWindow(usage, dateKey, dateTime) {
+    var shiftKey = getProductionShiftKey(dateKey, dateTime);
+    if (!shiftKey) return;
+
+    var timestamp = dateTime.getTime();
+    if (!usage.shiftWindows) usage.shiftWindows = {};
+    if (!usage.shiftWindows[shiftKey]) {
+      usage.shiftWindows[shiftKey] = {
         firstCutTime: timestamp,
         lastCutTime: timestamp
       };
       return;
     }
 
-    usage.dailyWindows[dateKey].firstCutTime = Math.min(usage.dailyWindows[dateKey].firstCutTime, timestamp);
-    usage.dailyWindows[dateKey].lastCutTime = Math.max(usage.dailyWindows[dateKey].lastCutTime, timestamp);
+    usage.shiftWindows[shiftKey].firstCutTime = Math.min(usage.shiftWindows[shiftKey].firstCutTime, timestamp);
+    usage.shiftWindows[shiftKey].lastCutTime = Math.max(usage.shiftWindows[shiftKey].lastCutTime, timestamp);
   }
 
-  function sumDailyWindowMinutes(dailyWindows) {
-    return Object.keys(dailyWindows || {}).reduce(function(total, dateKey) {
-      var window = dailyWindows[dateKey];
+  function sumShiftWindowMinutes(shiftWindows) {
+    return Object.keys(shiftWindows || {}).reduce(function(total, shiftKey) {
+      var window = shiftWindows[shiftKey];
       return total + Math.max(0, (window.lastCutTime - window.firstCutTime) / (1000 * 60));
     }, 0);
   }
@@ -433,7 +444,8 @@ function getReportDataFromSpreadsheet_(spreadsheet, options) {
           "2 cortes em angulo": 0
         },
         firstCutTime: timestamp,
-        lastCutTime: timestamp
+        lastCutTime: timestamp,
+        shiftWindows: {}
       };
     }
 
@@ -442,6 +454,7 @@ function getReportDataFromSpreadsheet_(spreadsheet, options) {
     if (classifiedCutType) daySummary.cutTypes[classifiedCutType] += quantity;
     daySummary.firstCutTime = Math.min(daySummary.firstCutTime, timestamp);
     daySummary.lastCutTime = Math.max(daySummary.lastCutTime, timestamp);
+    updateShiftWindow(daySummary, dateKey, item.dateTime);
 
     if (!reportData.profileBarUsage[item.profile]) {
       reportData.profileBarUsage[item.profile] = {
@@ -467,7 +480,7 @@ function getReportDataFromSpreadsheet_(spreadsheet, options) {
         },
         firstCutTime: timestamp,
         lastCutTime: timestamp,
-        dailyWindows: {}
+        shiftWindows: {}
       };
     }
 
@@ -477,7 +490,7 @@ function getReportDataFromSpreadsheet_(spreadsheet, options) {
     if (classifiedCutType) processSummary.cutTypes[classifiedCutType] += quantity;
     processSummary.firstCutTime = Math.min(processSummary.firstCutTime, timestamp);
     processSummary.lastCutTime = Math.max(processSummary.lastCutTime, timestamp);
-    updateDailyWindow(processSummary, dateKey, timestamp);
+    updateShiftWindow(processSummary, dateKey, item.dateTime);
 
     var operatorName = item.operator || "Sem operador";
     if (!reportData.operatorUsage[operatorName]) {
@@ -485,26 +498,27 @@ function getReportDataFromSpreadsheet_(spreadsheet, options) {
         totalCuts: 0,
         firstCutTime: timestamp,
         lastCutTime: timestamp,
-        dailyWindows: {}
+        shiftWindows: {}
       };
     }
     reportData.operatorUsage[operatorName].totalCuts += quantity;
     reportData.operatorUsage[operatorName].firstCutTime = Math.min(reportData.operatorUsage[operatorName].firstCutTime, timestamp);
     reportData.operatorUsage[operatorName].lastCutTime = Math.max(reportData.operatorUsage[operatorName].lastCutTime, timestamp);
-    updateDailyWindow(reportData.operatorUsage[operatorName], dateKey, timestamp);
+    updateShiftWindow(reportData.operatorUsage[operatorName], dateKey, item.dateTime);
   });
 
   var formattedDailySummary = [];
   Object.keys(reportData.dailySummary).sort().forEach(function(dateKey) {
     var summary = reportData.dailySummary[dateKey];
+    var timeMinutes = sumShiftWindowMinutes(summary.shiftWindows);
     formattedDailySummary.push({
       date: dateKey,
       totalCuts: summary.totalCuts,
       cuts2Retos: summary.cutTypes["2 cortes retos"],
       cuts1Reto1Angulo: summary.cutTypes["1 corte reto e 1 corte em angulo"],
       cuts2Angulos: summary.cutTypes["2 cortes em angulo"],
-      timeTaken: ((summary.lastCutTime - summary.firstCutTime) / (1000 * 60)).toFixed(2),
-      timeHours: minutesToHours((summary.lastCutTime - summary.firstCutTime) / (1000 * 60))
+      timeTaken: timeMinutes.toFixed(2),
+      timeHours: minutesToHours(timeMinutes)
     });
   });
   reportData.dailySummary = formattedDailySummary;
@@ -534,7 +548,7 @@ function getReportDataFromSpreadsheet_(spreadsheet, options) {
 
   Object.keys(reportData.operatorUsage).sort().forEach(function(operatorName) {
     var usage = reportData.operatorUsage[operatorName];
-    var timeMinutes = sumDailyWindowMinutes(usage.dailyWindows);
+    var timeMinutes = sumShiftWindowMinutes(usage.shiftWindows);
     reportData.operatorSummary.push({
       operator: operatorName,
       totalCuts: usage.totalCuts,
@@ -559,7 +573,7 @@ function getReportDataFromSpreadsheet_(spreadsheet, options) {
     Object.keys(reportData.clientProcessUsage[client]).sort().forEach(function(process) {
       processNames[process] = true;
       var usage = reportData.clientProcessUsage[client][process];
-      var timeMinutes = sumDailyWindowMinutes(usage.dailyWindows);
+      var timeMinutes = sumShiftWindowMinutes(usage.shiftWindows);
       var bars = usage.totalLength / 6000;
 
       clientTotals.totalCuts += usage.totalCuts;
