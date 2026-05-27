@@ -90,7 +90,7 @@ body.embed .content {
 }
 
 .production-kpis {
-  grid-template-columns: minmax(220px, 1.2fr) repeat(2, minmax(160px, .8fr));
+  grid-template-columns: minmax(220px, 1.25fr) repeat(3, minmax(150px, .75fr));
 }
 
 .kpi {

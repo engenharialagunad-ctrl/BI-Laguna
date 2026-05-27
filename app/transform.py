@@ -87,6 +87,13 @@ def key_text(value: Any) -> str:
     return text or "-"
 
 
+def production_label(category: Any) -> str:
+    normalized = key_text(category)
+    if "usinagem" in normalized or "usi" in normalized:
+        return "Usinagens"
+    return "Cortes"
+
+
 def add_number(target: Dict[str, Any], field: str, value: Any, digits: int = 2) -> None:
     target[field] = round(to_number(target.get(field)) + to_number(value), digits)
 
@@ -188,8 +195,22 @@ def build_charts(data: Dict[str, Any]) -> Dict[str, List[Dict[str, Any]]]:
             chart_item(
                 item.get("clientLabel") or item.get("client", "-"),
                 item.get("totalBars"),
-                cuts=to_number(item.get("totalCuts")),
+                quantity=to_number(item.get("totalQuantity") or item.get("totalCuts")),
+                quantityLabel=item.get("quantityLabel") or production_label(item.get("sourceCategory")),
+                timeHours=to_number(item.get("totalTimeHours") or minutes_to_hours(item.get("totalTimeMinutes"))),
                 meters=to_number(item.get("totalLengthMeters") or mm_to_meters(item.get("totalLength"))),
+                sourceCategory=item.get("sourceCategory", "-"),
+                sourceName=item.get("sourceName", "-"),
+            )
+            for item in data.get("clientSummary", []) or []
+        ],
+        "clientProduction": [
+            chart_item(
+                item.get("clientLabel") or item.get("client", "-"),
+                item.get("totalQuantity") or item.get("totalCuts"),
+                quantityLabel=item.get("quantityLabel") or production_label(item.get("sourceCategory")),
+                bars=to_number(item.get("totalBars")),
+                timeHours=to_number(item.get("totalTimeHours") or minutes_to_hours(item.get("totalTimeMinutes"))),
                 sourceCategory=item.get("sourceCategory", "-"),
                 sourceName=item.get("sourceName", "-"),
             )
@@ -280,6 +301,8 @@ def aggregate_payloads(payloads: List[Dict[str, Any]]) -> Dict[str, Any]:
     combined_data: Dict[str, Any] = {
         "indicators": {
             "totalCuts": 0,
+            "totalQuantity": 0,
+            "totalMachining": 0,
             "totalLength": 0,
             "totalLengthMeters": 0,
             "totalBars": 0,
@@ -350,11 +373,14 @@ def aggregate_payloads(payloads: List[Dict[str, Any]]) -> Dict[str, Any]:
             clients.add(key_text(client_name))
 
             if client_key not in client_summaries:
+                quantity_label = production_label(category_name)
                 client_summaries[client_key] = {
                     **enriched,
                     "client": client_name,
                     "clientLabel": f"{category_name} | {client_name}",
+                    "quantityLabel": quantity_label,
                     "processes": 0,
+                    "totalQuantity": 0,
                     "totalCuts": 0,
                     "totalLength": 0,
                     "totalLengthMeters": 0,
@@ -364,6 +390,7 @@ def aggregate_payloads(payloads: List[Dict[str, Any]]) -> Dict[str, Any]:
                 }
             target = client_summaries[client_key]
             add_number(target, "totalCuts", enriched.get("totalCuts"), 0)
+            add_number(target, "totalQuantity", enriched.get("totalCuts"), 0)
             add_number(target, "totalLength", enriched.get("totalLength"))
             add_number(target, "totalLengthMeters", enriched.get("totalLengthMeters"))
             add_number(target, "totalBars", enriched.get("totalBars"))
@@ -431,6 +458,12 @@ def aggregate_payloads(payloads: List[Dict[str, Any]]) -> Dict[str, Any]:
     combined_data["indicators"]["totalProcesses"] = len(processes)
     combined_data["indicators"]["totalSources"] = len(sources)
     combined_data["indicators"]["totalCategories"] = len(categories)
+    combined_data["indicators"]["totalQuantity"] = round(combined_data["indicators"]["totalCuts"], 0)
+    combined_data["indicators"]["totalMachining"] = round(sum(
+        to_number(item.get("totalQuantity") or item.get("totalCuts"))
+        for item in client_summaries.values()
+        if item.get("quantityLabel") == "Usinagens"
+    ), 0)
     combined_data["indicators"]["totalPieces"] = len(pieces) + int(fallback_total_pieces)
     combined_data["indicators"]["totalLength"] = round(combined_data["indicators"]["totalLength"], 2)
     combined_data["indicators"]["totalLengthMeters"] = round(combined_data["indicators"]["totalLengthMeters"], 2)

@@ -55,8 +55,9 @@ function renderProductionKpis(data) {
   );
   const cards = [
     { label: "Periodo de apontamento", value: period },
+    { label: "Total quantidade", value: formatInteger(indicators.totalQuantity || indicators.totalCuts) },
     { label: "Total de barras", value: formatNumber(indicators.totalBars) },
-    { label: "Total de cortes", value: formatInteger(indicators.totalCuts) }
+    { label: "Tempo total (h)", value: formatNumber(indicators.totalTimeHours) }
   ];
 
   return `<section class="kpis production-kpis">${cards.map((item) => `
@@ -128,23 +129,24 @@ function renderBars(title, rows, limit = 12) {
   return `<div class="panel"><h2>${title}</h2><div class="bars">${content || "Sem dados."}</div></div>`;
 }
 
-function renderClientBars(rows) {
+function renderClientProduction(rows) {
   const sorted = [...(rows || [])].sort((a, b) => numberValue(b.value) - numberValue(a.value));
   const max = sorted.reduce((highest, item) => Math.max(highest, numberValue(item.value)), 0);
   const content = sorted.map((item) => {
     const percent = max > 0 ? Math.max(3, Math.round((numberValue(item.value) / max) * 100)) : 0;
+    const quantityLabel = item.quantityLabel || "Quantidade";
     return `
       <div class="client-bar">
         <div class="client-bar__label">
           <strong>${safe(item.label)}</strong>
-          <span>${formatInteger(item.cuts)} cortes</span>
+          <span>${safe(quantityLabel)}: ${formatInteger(item.value)} | Tempo: ${formatNumber(item.timeHours)} h</span>
         </div>
         <div class="track"><div class="fill" style="width:${percent}%"></div></div>
-        <div class="client-bar__value">${safe(formatNumber(item.value))}</div>
+        <div class="client-bar__value">${safe(formatInteger(item.value))}</div>
       </div>
     `;
   }).join("");
-  return `<div class="panel panel-large"><h2>Barras processadas por cliente</h2><div class="client-bars">${content || "Sem dados."}</div></div>`;
+  return `<div class="panel panel-large"><h2>Quantidade apontada por cliente</h2><div class="client-bars">${content || "Sem dados."}</div></div>`;
 }
 
 function renderDonut(title, rows) {
@@ -193,18 +195,20 @@ function renderTable(title, headers, rows, fields) {
 }
 
 function renderClientProductionTable(rows) {
-  const sorted = [...(rows || [])].sort((a, b) => numberValue(b.totalBars) - numberValue(a.totalBars));
+  const sorted = [...(rows || [])].sort((a, b) => numberValue(b.totalQuantity || b.totalCuts) - numberValue(a.totalQuantity || a.totalCuts));
   const tableRows = sorted.map((row) => ({
     client: row.client,
     sourceCategory: row.sourceCategory,
-    totalCuts: formatInteger(row.totalCuts),
-    totalBars: formatNumber(row.totalBars)
+    quantityLabel: row.quantityLabel || (String(row.sourceCategory || "").toLowerCase().includes("usinagem") ? "Usinagens" : "Cortes"),
+    totalQuantity: formatInteger(row.totalQuantity || row.totalCuts),
+    totalBars: formatNumber(row.totalBars),
+    totalTimeHours: formatNumber(row.totalTimeHours)
   }));
   return renderTable(
     "Listagem por cliente",
-    ["Categoria", "Cliente", "Cortes", "Barras"],
+    ["Categoria", "Cliente", "Tipo", "Quantidade", "Barras", "Tempo (h)"],
     tableRows,
-    ["sourceCategory", "client", "totalCuts", "totalBars"]
+    ["sourceCategory", "client", "quantityLabel", "totalQuantity", "totalBars", "totalTimeHours"]
   );
 }
 
@@ -229,7 +233,7 @@ function render(payload) {
       ${renderFilters(payload)}
       ${renderProductionKpis(data)}
       <section class="single-grid">
-        ${renderClientBars(charts.clientBars)}
+        ${renderClientProduction(charts.clientProduction)}
         ${renderClientProductionTable(data.clientSummary)}
       </section>
     </section>
