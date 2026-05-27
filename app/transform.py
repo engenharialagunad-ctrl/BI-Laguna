@@ -43,6 +43,22 @@ def minutes_to_hours(value: Any) -> float:
     return round(to_number(value) / 60, 2)
 
 
+def month_period(value: Any) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    match = re.search(r"(\d{4})-(\d{2})", text)
+    if match:
+        return f"{match.group(2)}/{match.group(1)}"
+    match = re.search(r"(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})", text)
+    if match:
+        year = match.group(3)
+        if len(year) == 2:
+            year = f"20{year}"
+        return f"{int(match.group(2)):02d}/{year}"
+    return text
+
+
 def piece_id_set(payload_or_data: Dict[str, Any] | None) -> set[str]:
     data = (payload_or_data or {}).get("data") if isinstance(payload_or_data, dict) else {}
     if not isinstance(data, dict):
@@ -168,6 +184,17 @@ def build_charts(data: Dict[str, Any]) -> Dict[str, List[Dict[str, Any]]]:
             )
             for item in data.get("clientSummary", []) or []
         ],
+        "clientBars": [
+            chart_item(
+                item.get("clientLabel") or item.get("client", "-"),
+                item.get("totalBars"),
+                cuts=to_number(item.get("totalCuts")),
+                meters=to_number(item.get("totalLengthMeters") or mm_to_meters(item.get("totalLength"))),
+                sourceCategory=item.get("sourceCategory", "-"),
+                sourceName=item.get("sourceName", "-"),
+            )
+            for item in data.get("clientSummary", []) or []
+        ],
         "processTime": [
             chart_item(
                 item.get("processLabel") or f"{item.get('client', '-')} | {item.get('process', '-')}",
@@ -283,6 +310,7 @@ def aggregate_payloads(payloads: List[Dict[str, Any]]) -> Dict[str, Any]:
     client_summaries: Dict[Tuple[str, str], Dict[str, Any]] = {}
     process_summaries: Dict[Tuple[str, str, str], Dict[str, Any]] = {}
     client_process_sets: Dict[Tuple[str, str], set[str]] = {}
+    period_values = []
 
     for payload in payloads:
         source = payload.get("source") or get_source_metadata(payload)
@@ -309,6 +337,10 @@ def aggregate_payloads(payloads: List[Dict[str, Any]]) -> Dict[str, Any]:
 
         for cut_type, value in (data.get("cutTypeCounts") or {}).items():
             combined_data["cutTypeCounts"][cut_type] = combined_data["cutTypeCounts"].get(cut_type, 0) + to_number(value)
+
+        for row in data.get("dailySummary", []) or []:
+            if row.get("date"):
+                period_values.append(str(row.get("date")))
 
         for row in data.get("clientSummary", []) or []:
             enriched = enrich_metric_units(with_source(row, source))
@@ -372,8 +404,10 @@ def aggregate_payloads(payloads: List[Dict[str, Any]]) -> Dict[str, Any]:
                 add_number(target, field, enriched.get(field))
             if enriched.get("firstCut") and (not target.get("firstCut") or str(enriched.get("firstCut")) < str(target.get("firstCut"))):
                 target["firstCut"] = enriched.get("firstCut")
+                period_values.append(str(enriched.get("firstCut")))
             if enriched.get("lastCut") and (not target.get("lastCut") or str(enriched.get("lastCut")) > str(target.get("lastCut"))):
                 target["lastCut"] = enriched.get("lastCut")
+                period_values.append(str(enriched.get("lastCut")))
 
         for key in ["dailySummary", "profileBarUsage", "dailyProfileUsage", "operatorSummary"]:
             for row in data.get(key, []) or []:
@@ -403,6 +437,11 @@ def aggregate_payloads(payloads: List[Dict[str, Any]]) -> Dict[str, Any]:
     combined_data["indicators"]["totalBars"] = round(combined_data["indicators"]["totalBars"], 2)
     combined_data["indicators"]["totalTimeMinutes"] = round(combined_data["indicators"]["totalTimeMinutes"], 2)
     combined_data["indicators"]["totalTimeHours"] = round(combined_data["indicators"]["totalTimeHours"], 2)
+    if period_values:
+        period_values = sorted(period_values)
+        combined_data["indicators"]["periodStart"] = month_period(period_values[0])
+        combined_data["indicators"]["periodEnd"] = month_period(period_values[-1])
+        combined_data["indicators"]["periodLabel"] = f"{combined_data['indicators']['periodStart']} a {combined_data['indicators']['periodEnd']}"
     combined_data["pieceIds"] = sorted(pieces)
 
     generated_at = max((payload.get("generatedAt") or payload.get("receivedAt") or "") for payload in payloads)

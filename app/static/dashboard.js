@@ -15,6 +15,18 @@ function display(value) {
   return value === undefined || value === null || value === "" ? "-" : value;
 }
 
+function formatNumber(value, digits = 2) {
+  const parsed = numberValue(value);
+  return parsed.toLocaleString("pt-BR", {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits
+  });
+}
+
+function formatInteger(value) {
+  return Math.round(numberValue(value)).toLocaleString("pt-BR");
+}
+
 function safe(value) {
   return String(display(value))
     .replaceAll("&", "&amp;")
@@ -27,6 +39,27 @@ function safe(value) {
 function renderKpis(charts) {
   const kpis = charts.kpis || [];
   return `<section class="kpis">${kpis.map((item) => `
+    <div class="kpi">
+      <span>${safe(item.label)}</span>
+      <strong>${safe(item.value)}</strong>
+    </div>
+  `).join("")}</section>`;
+}
+
+function renderProductionKpis(data) {
+  const indicators = data.indicators || {};
+  const period = indicators.periodLabel || (
+    indicators.periodStart || indicators.periodEnd
+      ? `${display(indicators.periodStart)} a ${display(indicators.periodEnd)}`
+      : "-"
+  );
+  const cards = [
+    { label: "Periodo de apontamento", value: period },
+    { label: "Total de barras", value: formatNumber(indicators.totalBars) },
+    { label: "Total de cortes", value: formatInteger(indicators.totalCuts) }
+  ];
+
+  return `<section class="kpis production-kpis">${cards.map((item) => `
     <div class="kpi">
       <span>${safe(item.label)}</span>
       <strong>${safe(item.value)}</strong>
@@ -88,11 +121,30 @@ function renderBars(title, rows, limit = 12) {
       <div class="bar-row">
         <div>${safe(item.label)}</div>
         <div class="track"><div class="fill" style="width:${percent}%"></div></div>
-        <strong>${safe(item.value)}</strong>
+        <strong>${safe(formatNumber(item.value))}</strong>
       </div>
     `;
   }).join("");
   return `<div class="panel"><h2>${title}</h2><div class="bars">${content || "Sem dados."}</div></div>`;
+}
+
+function renderClientBars(rows) {
+  const sorted = [...(rows || [])].sort((a, b) => numberValue(b.value) - numberValue(a.value));
+  const max = sorted.reduce((highest, item) => Math.max(highest, numberValue(item.value)), 0);
+  const content = sorted.map((item) => {
+    const percent = max > 0 ? Math.max(3, Math.round((numberValue(item.value) / max) * 100)) : 0;
+    return `
+      <div class="client-bar">
+        <div class="client-bar__label">
+          <strong>${safe(item.label)}</strong>
+          <span>${formatInteger(item.cuts)} cortes</span>
+        </div>
+        <div class="track"><div class="fill" style="width:${percent}%"></div></div>
+        <div class="client-bar__value">${safe(formatNumber(item.value))}</div>
+      </div>
+    `;
+  }).join("");
+  return `<div class="panel panel-large"><h2>Barras processadas por cliente</h2><div class="client-bars">${content || "Sem dados."}</div></div>`;
 }
 
 function renderDonut(title, rows) {
@@ -140,6 +192,22 @@ function renderTable(title, headers, rows, fields) {
   `;
 }
 
+function renderClientProductionTable(rows) {
+  const sorted = [...(rows || [])].sort((a, b) => numberValue(b.totalBars) - numberValue(a.totalBars));
+  const tableRows = sorted.map((row) => ({
+    client: row.client,
+    sourceCategory: row.sourceCategory,
+    totalCuts: formatInteger(row.totalCuts),
+    totalBars: formatNumber(row.totalBars)
+  }));
+  return renderTable(
+    "Listagem por cliente",
+    ["Categoria", "Cliente", "Cortes", "Barras"],
+    tableRows,
+    ["sourceCategory", "client", "totalCuts", "totalBars"]
+  );
+}
+
 function render(payload) {
   const app = document.getElementById("app");
   if (!payload.ok) {
@@ -159,18 +227,10 @@ function render(payload) {
     </header>
     <section class="content">
       ${renderFilters(payload)}
-      ${renderKpis(charts)}
-      <section class="grid">
-        ${renderBars("Tempo por cliente e processo (h)", charts.processTime)}
-        ${renderDonut("Tipos de corte", charts.cutDistribution)}
-      </section>
-      <section class="grid">
-        ${renderBars("Tempo por cliente (h)", charts.clientTime, 10)}
-        ${renderBars("Barras por perfil", charts.profileBars, 10)}
-      </section>
-      <section class="grid">
-        ${renderTable("Resumo por cliente", ["Categoria", "Cliente", "Cortes", "Metros", "Tempo (h)"], data.clientSummary, ["sourceCategory", "client", "totalCuts", "totalLengthMeters", "totalTimeHours"])}
-        ${renderTable("Resumo por processo", ["Categoria", "Cliente", "Processo", "Cortes", "Metros", "Tempo (h)"], data.clientProcessSummary, ["sourceCategory", "client", "process", "totalCuts", "totalLengthMeters", "timeHours"])}
+      ${renderProductionKpis(data)}
+      <section class="single-grid">
+        ${renderClientBars(charts.clientBars)}
+        ${renderClientProductionTable(data.clientSummary)}
       </section>
     </section>
   `;
